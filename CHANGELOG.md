@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Test-only.** Pinned `test/fixture/workspace/` to the canonical byte-exact
+  bytes shared with the sibling repo for cross-language parity. No behaviour
+  change; SPEC-V2.2 §8 structural expectations still hold.
+
 ## [2.2.0] - 2026-07-05
 
 Workspace mode (SPEC-V2.2) — CCE can now understand an **ecosystem** of related
