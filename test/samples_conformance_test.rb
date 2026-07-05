@@ -70,6 +70,14 @@ class SamplesConformanceTest < Minitest::Test
     assert_equal "2.0", parsed["spec_version"]
   end
 
+  # The committed conformance.json is the cross-language equivalence gate. Secret
+  # protection (SPEC-V2.1) must not perturb it — the samples carry no secrets and
+  # no sensitive filenames, so this output stays byte-identical.
+  def test_committed_conformance_json_is_byte_identical
+    committed = File.read(File.expand_path("../conformance.json", __dir__))
+    assert_equal committed, CCE::Conformance.to_json(SAMPLES_DIR)
+  end
+
   def test_conformance_reflects_indexed_store_with_kind
     with_tmpdir do |dir|
       store = File.join(dir, "index.db")

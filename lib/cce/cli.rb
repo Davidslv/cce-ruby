@@ -93,21 +93,29 @@ module CCE
       embedder = "hash"
       metrics = nil
       no_metrics = false
+      allow_secrets = false
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--embedder NAME") { |v| embedder = v }
         o.on("--metrics PATH") { |v| metrics = v }
         o.on("--no-metrics") { no_metrics = true }
+        o.on("--allow-secrets") { allow_secrets = true }
       end
       rest = parser.parse(argv)
       dir = rest.shift
       return usage_error("index requires a <dir>") unless dir
       return usage_error("no such directory: #{dir}") unless File.directory?(dir)
 
+      if allow_secrets
+        @err.puts "warning: --allow-secrets is set; secret protection is DISABLED " \
+                  "(sensitive files are read and secrets are stored verbatim)"
+      end
+
       store ||= default_store_for(dir)
-      summary = Indexer.index(dir, store_path: store, embedder: embedder)
+      summary = Indexer.index(dir, store_path: store, embedder: embedder, allow_secrets: allow_secrets)
       @out.puts "Indexed #{summary[:files_indexed]} files " \
-                "(#{summary[:files_skipped]} skipped), " \
+                "(#{summary[:files_skipped]} skipped, " \
+                "#{summary[:sensitive_skipped]} sensitive skipped), " \
                 "#{summary[:total_chunks]} chunks in " \
                 "#{format('%.3f', summary[:elapsed])}s"
       @out.puts "Store: #{summary[:store_path]}"
@@ -417,7 +425,7 @@ module CCE
         cce — Code Context Engine
 
         Usage:
-          cce index <dir> [--store PATH] [--embedder hash|ollama] [--no-metrics]
+          cce index <dir> [--store PATH] [--embedder hash|ollama] [--no-metrics] [--allow-secrets]
           cce search <query> [--dir DIR | --store PATH] [--top-k N] [--no-graph] [--json] [--no-metrics]
           cce stats [--dir DIR | --store PATH]
           cce bench <repo-dir> [--lang ruby|rust|typescript|c] [--queries FILE] [--store PATH]

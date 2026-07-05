@@ -9,6 +9,7 @@
 #   - Deliberately NOT own the ranking algorithm (Retriever) or CLI formatting.
 
 require_relative "walker"
+require_relative "redactor"
 require_relative "chunker"
 require_relative "embedder"
 require_relative "ollama_embedder"
@@ -28,20 +29,28 @@ module CCE
     end
 
     # Index `root` into `store_path`.
-    # @return [Hash] summary { files_indexed:, files_skipped:, total_chunks:, elapsed: }
-    def index(root, store_path:, embedder: "hash")
+    #
+    # By default (SPEC-V2.1) two protection layers run: Layer 1 (walker) never
+    # reads sensitive files, and Layer 2 redacts high-confidence secrets from each
+    # file's content BEFORE chunking, so the store derives entirely from redacted
+    # text. `allow_secrets: true` disables both for the run.
+    # @return [Hash] summary { files_indexed:, files_skipped:, sensitive_skipped:, total_chunks:, elapsed: }
+    def index(root, store_path:, embedder: "hash", allow_secrets: false)
       started = monotonic
       emb = embedder.is_a?(String) ? build_embedder(embedder) : embedder
-      collected = Walker.collect(root)
+      collected = Walker.collect(root, allow_secrets: allow_secrets)
 
       records = []
       file_imports = {}
       file_tokens = {}
       collected[:files].each do |f|
-        chunks = Chunker.chunk_file(f[:content], f[:rel])
-        file_imports[f[:rel]] = Chunker.extract_imports(f[:content], f[:rel])
+        # Layer 2: the redacted content is what is chunked, embedded, and stored,
+        # so chunk_id/token_count derive from the redacted text (SPEC-V2.1 §2).
+        content = allow_secrets ? f[:content] : Redactor.redact(f[:content])
+        chunks = Chunker.chunk_file(content, f[:rel])
+        file_imports[f[:rel]] = Chunker.extract_imports(content, f[:rel])
         # Whole-file token count for the counterfactual baseline (DASHBOARD-SPEC §3).
-        file_tokens[f[:rel]] = Chunker.token_count(f[:content])
+        file_tokens[f[:rel]] = Chunker.token_count(content)
         vectors = emb.embed_batch(chunks.map(&:content))
         chunks.each_with_index do |c, i|
           records << { chunk: c, vector: vectors[i] }
@@ -56,6 +65,7 @@ module CCE
       {
         files_indexed: collected[:files].length,
         files_skipped: collected[:skipped],
+        sensitive_skipped: collected[:sensitive_skipped],
         total_chunks: records.length,
         elapsed: monotonic - started,
         store_path: store_path

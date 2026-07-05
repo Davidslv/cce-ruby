@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-07-05
+
+Secret & sensitive-file protection (SPEC-V2.1). Indexing becomes **secret-safe by
+default** through two layers, so credential files never enter the corpus and
+inline secrets are redacted before anything is chunked, embedded, or stored. This
+is an additive, secure-by-default minor release — the public API and the
+conformance output are unchanged.
+
+### Added
+
+- **Layer 1 — sensitive-file skipping (walker).** Files are classified by name
+  before they are read: sensitive extensions (`pem key p12 pfx keystore jks ppk
+  der asc`), exact credential basenames (`credentials.*`, `secrets.*`, `.netrc`,
+  `.pgpass`, `.htpasswd`, `.dockercfg`, `kubeconfig`, `id_rsa`/`id_dsa`/`id_ecdsa`/
+  `id_ed25519`), and the dotenv rule (`.env`/`.env.*` skipped, but
+  `.example`/`.sample`/`.template`/`.dist` templates indexed). Matches are never
+  read and are counted separately as `sensitive_skipped`. New module
+  `CCE::Sensitive`.
+- **Layer 2 — secret redaction (indexer).** Before chunking, each file's content
+  is scrubbed for high-confidence secrets (AWS, GitHub, Slack, Stripe, OpenAI,
+  Anthropic, Google keys; private-key blocks; JWTs; and a guarded generic
+  `key = value` assignment) with each match replaced by `[REDACTED:<LABEL>]`. The
+  redacted text is what is chunked, embedded, and stored. New module
+  `CCE::Redactor`.
+- **`--allow-secrets` flag on `index`.** Opt out of both layers for a run
+  (default off ⇒ protection on); prints a warning when set.
+- **Reporting.** The `index` summary now shows the `sensitive skipped` count.
+- **End-to-end secrets tests** covering each Layer-1 category, the redactor (each
+  label + a placeholder-guard negative), the fixture skip/redact behaviour, and
+  the `--allow-secrets` bypass. The secret-bearing fixtures (`.env`, `id_rsa`,
+  `config.rb`) are generated into a temp dir at runtime — their secret values are
+  assembled from split fragments, so no committed file contains a contiguous
+  secret-shaped literal (GitHub push protection stays green).
+
+### Unchanged
+
+- `conformance.json` is **byte-identical** — the sample fixtures carry no secrets
+  and no sensitive filenames, so both layers are no-ops over them.
+
 ## [2.0.0] - 2026-07-05
 
 Pluggable language packs (SPEC-V2 v2.0). Language support is reworked into a
@@ -138,7 +177,8 @@ Code Context Engine specification ([`SPEC.md`](SPEC.md), SPEC v1.0).
 - Test suite: 84 tests, ~94% line coverage (SimpleCov), deterministic and
   hermetic (no network).
 
-[Unreleased]: https://github.com/davidslv/cce-ruby/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/davidslv/cce-ruby/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/davidslv/cce-ruby/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/davidslv/cce-ruby/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/davidslv/cce-ruby/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/davidslv/cce-ruby/releases/tag/v1.0.0

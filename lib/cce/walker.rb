@@ -5,11 +5,14 @@
 # RESPONSIBILITIES:
 #   - Skip .git/.cce/node_modules/.venv/venv/__pycache__/dist/build and any dotdir.
 #   - Skip files > 2 MB and files that are not valid UTF-8.
+#   - Skip sensitive files entirely (never read them) unless secrets are allowed,
+#     counting them under a separate `sensitive_skipped` tally (SPEC-V2.1 §2).
 #   - Return relative paths normalised to "/" separators, sorted deterministically.
-#   - Deliberately NOT own chunking or persistence.
+#   - Deliberately NOT own chunking, redaction, or persistence.
 
 require "find"
 require_relative "config"
+require_relative "sensitive"
 
 module CCE
   module Walker
@@ -31,13 +34,21 @@ module CCE
     end
 
     # Like `walk` but also reports how many candidate files were skipped for
-    # being oversized or non-UTF-8 (directory exclusions are not counted).
-    # @return [Hash] { files: Array<Hash>, skipped: Integer }
-    def collect(root)
+    # being oversized or non-UTF-8 (`skipped`) and, separately, how many were
+    # skipped for being sensitive by name (`sensitive_skipped`, SPEC-V2.1 §2).
+    # A sensitive file is never read. Directory exclusions are not counted.
+    # @param allow_secrets [Boolean] when true, Layer 1 is disabled (read them all)
+    # @return [Hash] { files: Array<Hash>, skipped: Integer, sensitive_skipped: Integer }
+    def collect(root, allow_secrets: false)
       root = File.expand_path(root)
       files = []
       skipped = 0
+      sensitive_skipped = 0
       each_file(root) do |abs|
+        if !allow_secrets && Sensitive.sensitive?(File.basename(abs))
+          sensitive_skipped += 1
+          next
+        end
         content = read_text(abs)
         if content.nil?
           skipped += 1
@@ -45,7 +56,7 @@ module CCE
         end
         files << { path: abs, rel: relative(root, abs), content: content }
       end
-      { files: files.sort_by { |f| f[:rel] }, skipped: skipped }
+      { files: files.sort_by { |f| f[:rel] }, skipped: skipped, sensitive_skipped: sensitive_skipped }
     end
 
     def each_file(root)

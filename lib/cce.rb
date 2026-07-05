@@ -7,7 +7,7 @@
 #   - Own no other logic itself.
 
 module CCE
-  VERSION = "2.0.0"
+  VERSION = "2.1.0"
 
   @registry = nil
 
@@ -44,6 +44,8 @@ require_relative "cce/vector_store"
 require_relative "cce/keyword_store"
 require_relative "cce/graph_store"
 require_relative "cce/retriever"
+require_relative "cce/sensitive"
+require_relative "cce/redactor"
 require_relative "cce/walker"
 require_relative "cce/store"
 require_relative "cce/ollama_embedder"

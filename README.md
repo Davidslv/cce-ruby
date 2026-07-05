@@ -96,8 +96,13 @@ bundle exec bin/cce search "hash the password" --dir path/to/repo --top-k 10
 ## Usage
 
 ```sh
-# Index a directory (writes a store under <dir>/.cce/index.db by default)
+# Index a directory (writes a store under <dir>/.cce/index.db by default).
+# Secret protection is ON by default: sensitive files are skipped and inline
+# secrets are redacted before anything is stored (see "Secret protection" below).
 bundle exec bin/cce index path/to/repo
+
+# Opt out of secret protection for a single run (not recommended)
+bundle exec bin/cce index path/to/repo --allow-secrets
 
 # Search (loads the store from a fresh process)
 bundle exec bin/cce search "hash the password" --dir path/to/repo --top-k 10
@@ -121,7 +126,7 @@ bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 
 | Command | Purpose |
 |---|---|
-| `index <dir> [--store PATH] [--embedder hash\|ollama]` | Walk, chunk, embed, persist. |
+| `index <dir> [--store PATH] [--embedder hash\|ollama] [--allow-secrets]` | Walk, chunk, embed, persist. Secret-safe by default; `--allow-secrets` opts out. |
 | `search <query> [--dir DIR \| --store PATH] [--top-k N] [--no-graph] [--json]` | Load store, run retrieval. |
 | `stats [--dir DIR \| --store PATH]` | Chunk/file counts, per-language and per-`kind` breakdown, avg tokens, store size. |
 | `bench <repo-dir> [--queries FILE] [--store PATH]` | Run the benchmark, write `docs/BENCHMARKS.md`. |
@@ -129,6 +134,32 @@ bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 | `conformance <fixture-dir> [-o FILE]` | Emit the deterministic `conformance.json` (chunks include `kind`). |
 | `feedback <query-id> --helpful\|--not-helpful [--note "…"] [--dir DIR \| --store PATH]` | Rate a past search result (v1.1). |
 | `dashboard [--dir DIR \| --store PATH] [--port N] [--no-open]` | Serve the read-only, loopback-only metrics dashboard (v1.1). |
+
+## Secret & sensitive-file protection
+
+Indexing is **secret-safe by default** (two layers, both on unless you pass
+`--allow-secrets`):
+
+- **Layer 1 — sensitive files are never read.** Before a file is opened, its
+  name is checked against a fixed table: sensitive extensions (`pem`, `key`,
+  `p12`, `pfx`, `keystore`, `jks`, `ppk`, `der`, `asc`), exact credential
+  basenames (`credentials.*`, `secrets.*`, `.netrc`, `.pgpass`, `.htpasswd`,
+  `.dockercfg`, `kubeconfig`, `id_rsa`/`id_dsa`/`id_ecdsa`/`id_ed25519`), and the
+  dotenv rule (`.env` and `.env.*` are skipped — but safe templates ending in
+  `.example`, `.sample`, `.template`, or `.dist` are indexed normally). Skipped
+  files are reported separately as `sensitive skipped` in the `index` summary and
+  never enter the store.
+- **Layer 2 — inline secrets are redacted before storage.** Each indexed file's
+  content is scrubbed for high-confidence secrets (AWS/GitHub/Slack/Stripe/
+  OpenAI/Anthropic/Google keys, private-key blocks, JWTs, and a guarded generic
+  `key = value` assignment) and each match is replaced with `[REDACTED:<LABEL>]`.
+  The **redacted** text is what gets chunked, embedded, and stored, so the local
+  store never contains the secret. Documentation placeholders such as
+  `API_KEY="your-api-key-here"` are left intact by design.
+
+`--allow-secrets` disables **both** layers for that run and prints a warning; use
+it only when you deliberately need to index credential material. Even so, the
+store is always local-only (`.cce/…` on disk) — see `SECURITY.md`.
 
 ## Embedders
 
