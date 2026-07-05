@@ -86,6 +86,10 @@ module CCE
                 end
 
       out.puts "Indexing #{repo} ..."
+      # Benchmark the WHOLE repository exactly as `cce index` does (SPEC-V2 §8):
+      # pack-matched files are AST-chunked into function/class chunks, every other
+      # in-scope text file becomes a single fallback `module` chunk, under the
+      # normal walk ignore rules. No bench-specific corpus filtering.
       summary = Indexer.index(repo, store_path: store_path, embedder: "hash")
       retriever = Indexer.retriever_from_store(store_path)
 

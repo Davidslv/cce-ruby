@@ -5,6 +5,15 @@ indexed from a pinned tag of a real repository with the default deterministic
 hashing embedder, then measured on ten labelled queries. Python and JavaScript are
 validated packs but are not benchmarked.
 
+**Corpus scope.** `cce bench` indexes the **whole repository exactly as `cce
+index` does**: pack-matched files (`.rb`, `.rs`, `.ts`/`.tsx`, `.c`/`.h`, `.py`,
+`.js`/…) are AST-chunked into function/class chunks, and every other in-scope text
+file becomes a single fallback `module` chunk — all under the normal walk ignore
+rules (`.git`, `.cce`, `node_modules`, `.venv`/`venv`, `__pycache__`, `dist`,
+`build`, any dotdir; non-UTF-8 and files > 2 MB skipped). There is no
+bench-specific corpus filtering, so both implementations benchmark the identical
+whole-repo corpus.
+
 ## Environment
 
 | Field | Value |
@@ -15,16 +24,18 @@ validated packs but are not benchmarked.
 
 ## Per-language results
 
-| Language | Repo (tag) | Commit | Files | Chunks | Chunks/s | p50 | p95 | Recall@5 | Recall@10 | Token savings |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Ruby | `sinatra/sinatra` (v4.1.1) | `7b50a1bb` | 287 | 1337 | 1646 | 17.7 ms | 18.9 ms | 90.0% | 90.0% | 72.6% |
-| Rust | `sharkdp/hyperfine` (v1.19.0) | `12fec420` | 59 | 368 | 1399 | 5.3 ms | 6.3 ms | 60.0% | 80.0% | 42.1% |
-| TypeScript | `pmndrs/zustand` (v5.0.3) | `3f9127f4` | 111 | 1278 | 2132 | 16.9 ms | 18.2 ms | 70.0% | 80.0% | 47.5% |
-| C | `jqlang/jq` (jq-1.7.1) | `71c2ab50` | 294 | 1667 | 1034 | 21.7 ms | 23.5 ms | 60.0% | 70.0% | 77.4% |
+| Language | Repo (tag) | Commit | Files | Chunks | Index s | Chunks/s | p50 | p95 | Recall@5 | Recall@10 | Token savings |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Ruby | `sinatra/sinatra` (v4.1.1) | `7b50a1bb` | 287 | 1337 | 0.818 | 1635 | 18.1 ms | 19.3 ms | 90.0% | 90.0% | 72.6% |
+| Rust | `sharkdp/hyperfine` (v1.19.0) | `12fec420` | 59 | 368 | 0.265 | 1387 | 5.3 ms | 6.4 ms | 60.0% | 80.0% | 42.1% |
+| TypeScript | `pmndrs/zustand` (v5.0.3) | `3f9127f4` | 111 | 1278 | 0.603 | 2118 | 17.0 ms | 18.4 ms | 70.0% | 80.0% | 47.5% |
+| C | `jqlang/jq` (jq-1.7.1) | `71c2ab50` | 294 | 1667 | 1.654 | 1008 | 22.4 ms | 23.7 ms | 60.0% | 70.0% | 77.4% |
 
 Recall is the fraction of the ten labelled queries whose top-K result set contains
 a file matching the expected path substring; token savings is `1 − served/baseline`
-averaged over the query set (chunks served vs. whole result files).
+averaged over the query set (chunks served vs. whole result files). "Index s" is
+wall-clock indexing time for the whole repository. Latency figures are the median
+and 95th-percentile over the labelled query set, five repetitions each.
 
 ## Interpretation
 
@@ -41,6 +52,7 @@ handful of function/class chunks instead of whole files, and the ratio rises wit
 average file size (jq's large C sources save the most). Latency is dominated by
 exact brute-force cosine plus BM25 over every chunk (no ANN index, by design) and
 scales with corpus size — from ~5 ms on hyperfine's 368 chunks to ~22 ms on jq's
-1667 — comfortably interactive at these sizes. Recall and token-savings numbers
-are a function of the corpus and algorithm only, so they match the sibling Rust
-implementation on the same corpora; latency is language- and runtime-dependent.
+1667 — comfortably interactive at these sizes. Because the whole-repo corpus,
+chunking, and query sets are identical across implementations, Recall@5/@10 and
+token-savings numbers must match the sibling Rust implementation on the same
+pinned commits exactly; only latency (language- and runtime-dependent) differs.

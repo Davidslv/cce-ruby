@@ -332,6 +332,17 @@ clone shallowly at the pinned tag, record the exact commit in the report, index,
 and measure the base metrics (index files/chunks/sec; query p50/p95;
 Recall@5/@10; mean token savings) using the default hashing embedder.
 
+**Corpus scope (normative).** `cce bench` indexes the **whole repository exactly
+as `cce index` does**: files whose extension is claimed by a pack are AST-chunked
+into function/class chunks, and every other in-scope text file becomes a single
+fallback `module` chunk — all under the normal walk ignore rules (SPEC §7.1:
+`.git/`, `.cce/`, `node_modules/`, `.venv`/`venv/`, `__pycache__/`, `dist/`,
+`build/`, any dotdir; skip non-UTF-8 and files > 2 MB). There is **no**
+bench-specific corpus filtering (no pack-extension-only subset). Both
+implementations benchmark this identical whole-repo corpus, so Recall@5/@10 and
+mean token savings must match **exactly** across the two implementations on the
+same pinned commit; only latency differs by language/runtime.
+
 | Lang | Repo (pin a recent stable tag; record the commit) | Suggested labeled queries → expected path substring |
 |---|---|---|
 | Ruby | `sinatra/sinatra` | "route matching and dispatch"→base · "render erb/haml template"→base · "session and cookies"→base · "mime type helpers"→base · "middleware stack"→base · "delegator methods"→base · "handle errors and show exceptions"→show_exceptions · "streaming responses"→base · "rack response building"→base · "url helpers"→base |
@@ -341,8 +352,8 @@ Recall@5/@10; mean token savings) using the default hashing embedder.
 
 If a target file doesn't exist at your pinned tag, drop that query and note it.
 `docs/BENCHMARKS.md`: a per-language table plus one interpretive paragraph. Both
-implementations will get **identical** recall/savings numbers on the same corpus
-(another cross-check); latency differs by language.
+implementations will get **identical** recall/savings numbers on the same
+whole-repo corpus (another cross-check); latency differs by language.
 
 ---
 
