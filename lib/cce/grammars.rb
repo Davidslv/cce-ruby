@@ -1,37 +1,42 @@
-# WHY: tree-sitter needs compiled grammar shared libraries to parse a language.
-#      We depend on the `tree_sitter_language_pack` gem to download prebuilt
-#      Python/JavaScript parsers, then hand their dylib paths to the
-#      `ruby_tree_sitter` bindings which do the actual parsing. This file is the
-#      bridge between those two gems.
-# WHAT: Lazy loader/cache of TreeSitter::Language objects keyed by language name.
+# WHY: tree-sitter needs a compiled grammar shared library to parse a language.
+#      Packs (lib/cce/packs/*) declare *which* grammar they need by name; this
+#      module is the language-agnostic bridge that turns a grammar name into a
+#      loaded `TreeSitter::Language`. It knows how to *find and load* a grammar,
+#      but nothing about what any language means — that lives in the packs.
+# WHAT: Lazy loader/cache of TreeSitter::Language objects keyed by grammar name.
 # RESPONSIBILITIES:
 #   - Ensure the required grammar dylib is present (prefetch on first use).
 #   - Locate the dylib in the language-pack cache and load it via ruby_tree_sitter.
-#   - Memoise loaded languages; expose nil for unsupported languages.
-#   - Deliberately NOT own chunking rules (that is the chunker's job).
+#   - Memoise loaded languages; return nil (never raise) when a grammar is absent.
+#   - Deliberately NOT own chunking rules or any per-language node types.
 
 require "tree_sitter"
 
 module CCE
   module Grammars
-    SUPPORTED = %w[python javascript].freeze
-
     @languages = {}
-    @loaded_pack = false
+    @prefetched = {}
 
     module_function
 
-    # @param name [String] "python" or "javascript"
-    # @return [TreeSitter::Language, nil] loaded grammar, or nil if unsupported
+    # @param name [String] a tree-sitter grammar name, e.g. "ruby", "rust"
+    # @return [TreeSitter::Language, nil] loaded grammar, or nil if unavailable
     def language(name)
-      return nil unless SUPPORTED.include?(name)
+      key = name.to_s
+      return @languages[key] if @languages.key?(key)
 
-      @languages[name] ||= load_language(name)
+      @languages[key] = load_language(key)
+    rescue StandardError
+      @languages[key] = nil
     end
 
     def load_language(name)
       path = dylib_path(name)
+      return nil unless path
+
       TreeSitter::Language.load(name, path)
+    rescue StandardError
+      nil
     end
 
     # Resolve the dylib path from the language-pack cache, prefetching if needed.
@@ -45,27 +50,26 @@ module CCE
           File.join(dir, "#{name}.dylib")
         ]
       end
-      found = candidates.find { |p| File.exist?(p) }
-      raise "grammar dylib for #{name} not found (looked in #{pack_lib_dirs.inspect})" unless found
-
-      found
+      candidates.find { |p| File.exist?(p) }
     end
 
     def ensure_prefetched(name)
       require "tree_sitter_language_pack"
-      unless @loaded_pack
-        # Downloads any missing grammar dylibs into the pack cache. Cheap no-op
-        # once cached; the default test suite relies on the cache already warm.
+      return if @prefetched[name]
+
+      begin
+        TreeSitterLanguagePack.prefetch([name])
+      rescue StandardError
         begin
-          TreeSitterLanguagePack.prefetch(SUPPORTED)
-        rescue StandardError
           TreeSitterLanguagePack.download(name)
+        rescue StandardError
+          # Grammar genuinely unavailable; dylib_path returns nil, language nil.
         end
-        @loaded_pack = true
       end
+      @prefetched[name] = true
     rescue LoadError
       # Pack gem absent: fall back to whatever dylibs already exist on disk.
-      @loaded_pack = true
+      @prefetched[name] = true
     end
 
     def pack_lib_dirs

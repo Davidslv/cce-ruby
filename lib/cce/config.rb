@@ -34,16 +34,13 @@ module CCE
 
     MAX_FILE_BYTES = 2 * 1024 * 1024 # 2 MB (SPEC §7.1)
 
-    SPEC_VERSION = "1.0"
+    # v2: the conformance output shape changes (chunks carry `kind`) and the
+    # supported-language set changes, so this is a major spec bump (SPEC-V2 §7).
+    SPEC_VERSION = "2.0"
 
-    # Extension → language resolution (SPEC §4.2).
-    LANGUAGE_BY_EXT = {
-      ".py"  => "python",
-      ".js"  => "javascript",
-      ".jsx" => "javascript",
-      ".mjs" => "javascript",
-      ".cjs" => "javascript"
-    }.freeze
+    # NOTE: extension → language resolution no longer lives here. Each language
+    # is a LanguagePack that declares its own extensions (SPEC-V2 §1); the engine
+    # resolves files through the registry (see lib/cce/packs.rb).
   end
 
   # Runtime configuration resolved from CLI flags / config file, defaulting to

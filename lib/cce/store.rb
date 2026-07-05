@@ -23,6 +23,7 @@ module CCE
         start_line INTEGER NOT NULL,
         end_line   INTEGER NOT NULL,
         chunk_type TEXT NOT NULL,
+        kind       TEXT NOT NULL,
         language   TEXT NOT NULL,
         content    TEXT NOT NULL,
         token_count INTEGER NOT NULL,
@@ -86,14 +87,14 @@ module CCE
 
         ins = @db.prepare(
           "INSERT OR REPLACE INTO chunks
-           (chunk_id, file_path, start_line, end_line, chunk_type, language, content, token_count, embedding)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+           (chunk_id, file_path, start_line, end_line, chunk_type, kind, language, content, token_count, embedding)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         records.each do |rec|
           c = rec[:chunk]
           blob = SQLite3::Blob.new(pack_vector(rec[:vector]))
           ins.execute(c.chunk_id, c.file_path, c.start_line, c.end_line,
-                      c.chunk_type, c.language, c.content, c.token_count, blob)
+                      c.chunk_type, c.kind, c.language, c.content, c.token_count, blob)
         end
         ins.close
 
@@ -113,12 +114,13 @@ module CCE
     # @return [Array<Chunk>]
     def chunks
       @db.execute(
-        "SELECT chunk_id, file_path, start_line, end_line, chunk_type, language, content, token_count
+        "SELECT chunk_id, file_path, start_line, end_line, chunk_type, kind, language, content, token_count
          FROM chunks"
       ).map do |row|
         Chunk.new(
           chunk_id: row[0], file_path: row[1], start_line: row[2], end_line: row[3],
-          chunk_type: row[4], language: row[5], content: force_utf8(row[6]), token_count: row[7]
+          chunk_type: row[4], kind: row[5], language: row[6],
+          content: force_utf8(row[7]), token_count: row[8]
         )
       end
     end

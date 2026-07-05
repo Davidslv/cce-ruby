@@ -175,6 +175,7 @@ module CCE
             tokens_saved: s["tokens_saved"].to_i,
             savings_ratio: r6(s["savings_ratio"].to_f),
             top_score: r6(s["top_score"].to_f),
+            top_kind: s["top_kind"].to_s,
             empty: s["result_count"].to_i.zero?,
             feedback: resolved[s["id"]] || "none"
           }

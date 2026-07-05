@@ -211,6 +211,7 @@ module CCE
               const rows = (m.recent_searches || []).map(r => $("tr", {}, [
                 $("td", { text: r.query || "" }),
                 $("td", { class: "num", text: fmtInt(r.result_count) }),
+                $("td", { text: r.top_kind || "" }),
                 $("td", { class: "num", text: fmtInt(r.tokens_saved) }),
                 $("td", { class: "num", text: fmt3(r.top_score) }),
                 $("td", {}, [$("span", { class: "pill " + r.feedback, text: r.feedback.replace("_", "-") })])
@@ -218,6 +219,7 @@ module CCE
               const table = $("table", {}, [
                 $("thead", {}, [$("tr", {}, [
                   $("th", { text: "Query" }), $("th", { class: "num", text: "Results" }),
+                  $("th", { text: "Top kind" }),
                   $("th", { class: "num", text: "Tokens saved" }), $("th", { class: "num", text: "Top score" }), $("th", { text: "Feedback" })
                 ])]),
                 $("tbody", {}, rows)

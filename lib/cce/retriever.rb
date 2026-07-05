@@ -227,6 +227,7 @@ module CCE
         start_line: chunk.start_line,
         end_line: chunk.end_line,
         chunk_type: chunk.chunk_type,
+        kind: chunk.kind,
         language: chunk.language,
         token_count: chunk.token_count,
         content: chunk.content,

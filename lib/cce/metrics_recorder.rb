@@ -42,6 +42,7 @@ module CCE
 
         result_count = results.length
         top_score = result_count.zero? ? 0.0 : results.first[:score].to_f
+        top_kind = result_count.zero? ? "" : results.first[:kind].to_s
         mean_score = result_count.zero? ? 0.0 : results.sum { |r| r[:score].to_f } / result_count
         empty = result_count.zero?
         low_confidence = result_count.positive? && top_score < LOW_CONFIDENCE_THRESHOLD
@@ -57,6 +58,7 @@ module CCE
           "tokens_saved" => saved,
           "savings_ratio" => ratio,
           "top_score" => top_score,
+          "top_kind" => top_kind,
           "mean_score" => mean_score,
           "empty" => empty,
           "low_confidence" => low_confidence,
