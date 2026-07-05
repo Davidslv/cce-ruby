@@ -1,0 +1,105 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    docile (1.4.1)
+    minitest (5.27.0)
+    oppen (1.0.0)
+    rake (13.4.2)
+    ruby_tree_sitter (2.1.1-aarch64-linux-gnu)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    ruby_tree_sitter (2.1.1-aarch64-linux-musl)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    ruby_tree_sitter (2.1.1-arm64-darwin)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    ruby_tree_sitter (2.1.1-x86_64-darwin)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    ruby_tree_sitter (2.1.1-x86_64-linux-gnu)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    ruby_tree_sitter (2.1.1-x86_64-linux-musl)
+      oppen (~> 1.0)
+      sorbet-runtime
+      zeitwerk
+    simplecov (0.22.0)
+      docile (~> 1.1)
+      simplecov-html (~> 0.11)
+      simplecov_json_formatter (~> 0.1)
+    simplecov-html (0.13.2)
+    simplecov_json_formatter (0.1.4)
+    sorbet-runtime (0.6.13323)
+    sqlite3 (2.9.5-aarch64-linux-gnu)
+    sqlite3 (2.9.5-aarch64-linux-musl)
+    sqlite3 (2.9.5-arm64-darwin)
+    sqlite3 (2.9.5-x86_64-darwin)
+    sqlite3 (2.9.5-x86_64-linux-gnu)
+    sqlite3 (2.9.5-x86_64-linux-musl)
+    tree_sitter_language_pack (1.12.4-aarch64-linux)
+      sorbet-runtime (~> 0.5)
+    tree_sitter_language_pack (1.12.4-arm64-darwin)
+      sorbet-runtime (~> 0.5)
+    tree_sitter_language_pack (1.12.4-x86_64-darwin)
+      sorbet-runtime (~> 0.5)
+    tree_sitter_language_pack (1.12.4-x86_64-linux)
+      sorbet-runtime (~> 0.5)
+    zeitwerk (2.8.2)
+
+PLATFORMS
+  aarch64-linux
+  aarch64-linux-gnu
+  aarch64-linux-musl
+  arm64-darwin
+  x86_64-darwin
+  x86_64-linux
+  x86_64-linux-gnu
+  x86_64-linux-musl
+
+DEPENDENCIES
+  minitest (~> 5.25)
+  rake (~> 13.2)
+  ruby_tree_sitter (~> 2.1)
+  simplecov (~> 0.22)
+  sqlite3 (~> 2.9)
+  tree_sitter_language_pack (~> 1.12)
+
+CHECKSUMS
+  bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
+  docile (1.4.1) sha256=96159be799bfa73cdb721b840e9802126e4e03dfc26863db73647204c727f21e
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  oppen (1.0.0) sha256=379bf0b35c5e87c5f4139927721fd6c9f561e344a73ce3f658726a609034ddee
+  rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  ruby_tree_sitter (2.1.1-aarch64-linux-gnu) sha256=a5d93b676b69b7c0f0421b8a947c41b8c44d7d626b66537d458d066ff8ab8970
+  ruby_tree_sitter (2.1.1-aarch64-linux-musl) sha256=a7c7cae91d58ff98ff5ec43ab10798547080dce2fdc0c65b591aea35758278e5
+  ruby_tree_sitter (2.1.1-arm64-darwin) sha256=3589d94bd6f960f14a39b225e1e57c8a56ad6150a176ebf8afaa6de08bf1c6f4
+  ruby_tree_sitter (2.1.1-x86_64-darwin) sha256=09324ce89e8323db61436b8288ee68b877883c21d6346f19cc8ec2af59d834f5
+  ruby_tree_sitter (2.1.1-x86_64-linux-gnu) sha256=a3010251d56edaecf1ef7162fbf18204dde1fda853b2e41c19db7a25cd811f7a
+  ruby_tree_sitter (2.1.1-x86_64-linux-musl) sha256=e74069896ca6a0a68d6ceea261f02e56c78481b2127eadbf0d84849e7cc236f0
+  simplecov (0.22.0) sha256=fe2622c7834ff23b98066bb0a854284b2729a569ac659f82621fc22ef36213a5
+  simplecov-html (0.13.2) sha256=bd0b8e54e7c2d7685927e8d6286466359b6f16b18cb0df47b508e8d73c777246
+  simplecov_json_formatter (0.1.4) sha256=529418fbe8de1713ac2b2d612aa3daa56d316975d307244399fa4838c601b428
+  sorbet-runtime (0.6.13323) sha256=cf9c4e6793e1a9ef69bd96e3a006e0fd1fead429f4e4370163460bf569a23518
+  sqlite3 (2.9.5-aarch64-linux-gnu) sha256=78075b6337d3d182c6d2b4691049ed45cd220826160c9ea18946bf6a1de200dc
+  sqlite3 (2.9.5-aarch64-linux-musl) sha256=18c801185deb4adc01ddb281e8f672a39e3d1729979ca91e39439cd3eac0402d
+  sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
+  sqlite3 (2.9.5-x86_64-darwin) sha256=8e9caae38bd7ebb29cbeee3e7ab1d12dc2327d9a1b92c7fcf0dda05589627a81
+  sqlite3 (2.9.5-x86_64-linux-gnu) sha256=233dbcb6714148dd23bc5aeb33e8efd6eac974969564ddd5794c23d5f52b231e
+  sqlite3 (2.9.5-x86_64-linux-musl) sha256=e7d3a7474e8af0f96150c21abc203fbab5437206bfcdf11deab7741c0ca516f2
+  tree_sitter_language_pack (1.12.4-aarch64-linux) sha256=711b5548a8480290753247c0cb74e5cf4453ee54b48edfae69122fafa338ea7b
+  tree_sitter_language_pack (1.12.4-arm64-darwin) sha256=9ba3c6dd0319465d4363ec414f40733e9dc87ba6aba4302309ac6749c6993bcd
+  tree_sitter_language_pack (1.12.4-x86_64-darwin) sha256=a80c8e46805cad6f88e81dcc76e53546dba780d62d1e6d0ea1f1be271a893a8b
+  tree_sitter_language_pack (1.12.4-x86_64-linux) sha256=66c8986b643487580a924ccde133f16fdf752352fb8d85bbc95b1e2d1a6283b2
+  zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
+
+RUBY VERSION
+  ruby 3.4.7
+
+BUNDLED WITH
+  4.0.11

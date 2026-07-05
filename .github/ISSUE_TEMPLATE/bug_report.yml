@@ -1,0 +1,113 @@
+name: Bug report
+description: Report behaviour that diverges from SPEC.md or is otherwise broken.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. CCE is a spec-first project — the clearest
+        reports say what SPEC.md leads you to expect vs. what actually happened,
+        with steps to reproduce. Please do not report security issues here (see
+        SECURITY.md).
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through SECURITY.md).
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the pipeline is involved?
+      options:
+        - "index (walking / chunking / embedding / persistence)"
+        - "search (retrieval / ranking)"
+        - "stats"
+        - "bench"
+        - "conformance"
+        - "CLI / argument parsing"
+        - "Ollama embedder"
+        - "Other / not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: embedder
+    attributes:
+      label: Embedder in use
+      options:
+        - "hash (default)"
+        - "ollama"
+        - "Not applicable"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect, and (if relevant) which part of SPEC.md says so?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happened instead? Include exact output or error messages.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands you ran (e.g. `bundle exec bin/cce index ...`).
+      placeholder: |
+        1. bundle exec bin/cce index path/to/repo
+        2. bundle exec bin/cce search "..." --dir path/to/repo
+        3. ...
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: ruby-version
+    attributes:
+      label: Ruby version
+      description: Output of `ruby -v`.
+      placeholder: "ruby 3.4.7"
+    validations:
+      required: true
+
+  - type: input
+    id: cce-version
+    attributes:
+      label: cce-ruby version / commit
+      description: Release version or git commit SHA.
+      placeholder: "1.0.0 / abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15 (arm64) / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else — logs, a minimal fixture, screenshots.
+    validations:
+      required: false

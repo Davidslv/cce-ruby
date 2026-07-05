@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/davidslv/cce-ruby/discussions
+    about: Ask a question, share an idea, or discuss usage. Not for bug reports.
+  - name: Security vulnerability
+    url: https://github.com/davidslv/cce-ruby/security/advisories/new
+    about: Report a security issue privately. Please do NOT open a public issue.
+  - name: Specification (SPEC.md)
+    url: https://github.com/davidslv/cce-ruby/blob/main/SPEC.md
+    about: The authoritative reference for expected behaviour. Check here first.

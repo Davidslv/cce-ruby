@@ -1,0 +1,23 @@
+# Coverage reports (SimpleCov)
+/coverage/
+
+# Generated on-disk stores
+/.cce/
+**/.cce/
+*.db
+
+# Temporary / scratch
+/tmp/
+*.log
+
+# Bundler / Ruby
+/.bundle/
+/vendor/bundle/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

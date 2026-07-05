@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: "cce-ruby: Code Context Engine (Ruby implementation)"
+abstract: >-
+  A local command-line Code Context Engine: it AST-chunks a source-code
+  repository with tree-sitter, embeds each chunk, stores a vector and keyword
+  index on disk, and answers queries with hybrid vector + BM25 retrieval. A
+  clean-room, test-first Ruby implementation of the shared specification
+  (SPEC v1.0).
+type: software
+authors:
+  - given-names: David
+    family-names: Silva
+    website: "https://davidslv.uk"
+    alias: davidslv
+repository-code: "https://github.com/davidslv/cce-ruby"
+url: "https://github.com/davidslv/cce-ruby"
+license: MIT
+version: 1.0.0
+date-released: "2026-07-05"
+keywords:
+  - code-search
+  - retrieval
+  - tree-sitter
+  - bm25
+  - embeddings
+  - rag
+  - ruby

@@ -1,0 +1,42 @@
+# cce-ruby — Code Context Engine (Ruby implementation)
+
+> A local, offline-by-default CLI that indexes a code repository (AST-chunks
+> files with tree-sitter, embeds each chunk, stores a vector + BM25 keyword
+> index + import graph on disk in SQLite) and answers queries with hybrid
+> vector + BM25 + Reciprocal Rank Fusion retrieval. A clean-room, test-first
+> Ruby implementation of a shared specification (SPEC v1.0); a sibling Rust
+> implementation is built from the identical spec.
+
+## Start here
+
+- [README](README.md): What CCE is, provenance, quickstart, commands, and a map to the docs.
+- [SPEC.md](SPEC.md): The authoritative specification — the source of truth for every behaviour.
+- [Getting started](docs/getting-started.md): Install → first successful index and search, self-serve.
+- [How-to recipes](docs/how-to.md): Task recipes — index, search, benchmark, conformance, Ollama.
+
+## Design and decisions
+
+- [Architecture](docs/architecture.md): Design goals, component/pipeline model, rationale, and where the design strains.
+- [Decisions](docs/DECISIONS.md): Every spec ambiguity resolved during implementation, with rationale.
+- [TDD log](docs/TDD.md): The test-first build order, final test count, and coverage.
+- [Benchmarks](docs/BENCHMARKS.md): Headline retrieval-quality and latency numbers.
+
+## Working in this repo
+
+- [AGENTS.md](AGENTS.md): Instructions for AI agents — the gates, test discipline, and the no-conformance-drift rule.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Dev setup, the `bundle exec rake test` gate, quality gates, and PR conventions.
+
+## Key source files
+
+- [bin/cce](bin/cce): The executable entry point; delegates to CCE::CLI.
+- [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/conformance).
+- [lib/cce/retriever.rb](lib/cce/retriever.rb): The hybrid retrieval pipeline (intent → RRF → confidence → penalty → diversity → graph).
+- [lib/cce/chunker.rb](lib/cce/chunker.rb): Tree-sitter AST chunking, import extraction, deterministic chunk id.
+- [lib/cce/store.rb](lib/cce/store.rb): SQLite persistence of chunks, vectors, imports, and embedder metadata.
+- [lib/cce/numeric_format.rb](lib/cce/numeric_format.rb): The determinism choke point — rounding, fixed-6 formatting, canonical sort.
+
+## Optional
+
+- [License (MIT)](LICENSE): MIT © 2026 David Silva.
+- [Security policy](SECURITY.md): Threat model (untrusted parsed input; localhost-only opt-in network) and private reporting.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 1.0.0 initial release (2026-07-05).

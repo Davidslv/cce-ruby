@@ -1,0 +1,15 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# WHY: The single user-facing executable for the Code Context Engine (SPEC §9).
+# WHAT: Thin entry point that loads the library and delegates to CCE::CLI.
+# RESPONSIBILITIES:
+#   - Set up the load path (works both from a bundle and standalone).
+#   - Delegate all logic to CCE::CLI and exit with its status code.
+
+require "bundler/setup" if File.exist?(File.expand_path("../Gemfile", __dir__))
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "cce"
+
+exit CCE::CLI.run(ARGV)
