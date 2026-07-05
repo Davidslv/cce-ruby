@@ -7,6 +7,7 @@ provided for the current minor series only.
 
 | Version | Supported |
 |---|---|
+| 1.1.x   | ✅ |
 | 1.0.x   | ✅ |
 | < 1.0   | ❌ |
 
@@ -35,6 +36,20 @@ matters more than boilerplate, so here is the real picture.
   **localhost HTTP** (`http://localhost:11434`). This is opt-in, localhost-only,
   and fails gracefully with a clear message if the server is unreachable. No
   other host is ever contacted.
+- **The dashboard server is loopback-only, read-only, and self-contained (v1.1).**
+  `cce dashboard` starts a WEBrick HTTP server **bound to `127.0.0.1`** — it does
+  not listen on any external interface, so it is not reachable from the network.
+  Every endpoint is **read-only**: `GET /`, `GET /api/metrics`, `GET /api/health`
+  only *read* the metrics log; nothing mutates state. The served page is **fully
+  self-contained** — all CSS/JS is inlined and charts are hand-drawn SVG, with
+  **no external network, CDN, or remote fonts/scripts** — so opening it makes no
+  outbound request. Because the bind is loopback and never leaves the local
+  machine, no auth token is required; **if a future version ever allowed binding
+  a non-loopback address, it would require a token** (mirroring this model).
+- **The metrics log is local, best-effort data.** Events are appended to
+  `<store-dir>/metrics.jsonl`. Writing is fail-open (a failure never breaks the
+  command and never raises), and it records only what you searched/indexed and
+  your feedback — it is not transmitted anywhere.
 
 ### Out of scope
 
@@ -42,8 +57,8 @@ matters more than boilerplate, so here is the real picture.
   *and* separately executing that code yourself — CCE does not do that for you.
 - The security of a third-party Ollama server you choose to run.
 - Supply-chain integrity of the upstream gems (`sqlite3`, `ruby_tree_sitter`,
-  `tree_sitter_language_pack`) beyond pinning them in the `Gemfile`; report
-  those to their respective maintainers.
+  `tree_sitter_language_pack`, `webrick`) beyond pinning them in the `Gemfile`;
+  report those to their respective maintainers.
 
 ## Reporting a vulnerability
 

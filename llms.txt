@@ -4,8 +4,9 @@
 > files with tree-sitter, embeds each chunk, stores a vector + BM25 keyword
 > index + import graph on disk in SQLite) and answers queries with hybrid
 > vector + BM25 + Reciprocal Rank Fusion retrieval. A clean-room, test-first
-> Ruby implementation of a shared specification (SPEC v1.0); a sibling Rust
-> implementation is built from the identical spec.
+> Ruby implementation of a shared specification (SPEC v1.0, plus the v1.1
+> dashboard/observability addendum); a sibling Rust implementation is built from
+> the identical spec.
 
 ## Start here
 
@@ -17,6 +18,7 @@
 ## Design and decisions
 
 - [Architecture](docs/architecture.md): Design goals, component/pipeline model, rationale, and where the design strains.
+- [Dashboard & observability](docs/dashboard.md): The v1.1 metrics pipeline (log → pure aggregator → API → self-contained page), event schema, and aggregation formulas.
 - [Decisions](docs/DECISIONS.md): Every spec ambiguity resolved during implementation, with rationale.
 - [TDD log](docs/TDD.md): The test-first build order, final test count, and coverage.
 - [Benchmarks](docs/BENCHMARKS.md): Headline retrieval-quality and latency numbers.
@@ -32,11 +34,15 @@
 - [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/conformance).
 - [lib/cce/retriever.rb](lib/cce/retriever.rb): The hybrid retrieval pipeline (intent → RRF → confidence → penalty → diversity → graph).
 - [lib/cce/chunker.rb](lib/cce/chunker.rb): Tree-sitter AST chunking, import extraction, deterministic chunk id.
-- [lib/cce/store.rb](lib/cce/store.rb): SQLite persistence of chunks, vectors, imports, and embedder metadata.
+- [lib/cce/store.rb](lib/cce/store.rb): SQLite persistence of chunks, vectors, imports, whole-file token counts, and embedder metadata.
 - [lib/cce/numeric_format.rb](lib/cce/numeric_format.rb): The determinism choke point — rounding, fixed-6 formatting, canonical sort.
+- [lib/cce/metrics_aggregator.rb](lib/cce/metrics_aggregator.rb): The v1.1 PURE aggregate function (totals, north-stars, daily series) — the cross-language dashboard anchor.
+- [lib/cce/dashboard_server.rb](lib/cce/dashboard_server.rb): The v1.1 loopback-only, read-only, self-contained WEBrick dashboard server.
+
+Note: the metrics/dashboard subsystem (`lib/cce/metrics*.rb`, `lib/cce/dashboard*.rb`) is the ONE place CCE uses wall-clock time and randomness (`ts`/`id`/`generated_ts`); both are injected so tests stay deterministic, and the aggregator itself is pure.
 
 ## Optional
 
 - [License (MIT)](LICENSE): MIT © 2026 David Silva.
-- [Security policy](SECURITY.md): Threat model (untrusted parsed input; localhost-only opt-in network) and private reporting.
-- [Changelog](CHANGELOG.md): Keep a Changelog format; 1.0.0 initial release (2026-07-05).
+- [Security policy](SECURITY.md): Threat model (untrusted parsed input; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 1.1.0 dashboard/observability, 1.0.0 initial release.

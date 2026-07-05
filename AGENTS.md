@@ -19,10 +19,19 @@ bundle exec rake test
 ```
 
 - This must pass (0 failures, 0 errors) before you consider any change done.
-- Baseline: **84 tests, ~94% line coverage** (SimpleCov). Do not let coverage
+- Baseline: **118 tests, ~93% line coverage** (SimpleCov). Do not let coverage
   regress. One test is skipped by design (the live Ollama integration test).
-- The suite is deterministic and hermetic — **no network, no clock, no
-  randomness**. Do not introduce any of these into tests.
+- The suite is deterministic and hermetic — **no external network, no real clock,
+  no randomness in assertions**. Do not introduce any of these into tests.
+- **Exception (v1.1):** the metrics/dashboard subsystem is the ONE place CCE uses
+  wall-clock time and randomness (`ts`/`id`/`generated_ts`). It is made testable
+  by **injecting** the clock and id source (`CCE::Metrics::FixedClock`,
+  `SequenceIdSource`, …) and by keeping the aggregator a **pure** function of
+  `(events, now, price)`. Tests must inject those, not read the real clock, and
+  the dashboard's HTTP tests bind an **ephemeral loopback port** (no real
+  network). The §4.1 aggregator anchor
+  (`test/metrics_aggregator_test.rb`) is a cross-language equivalence gate — keep
+  it exact.
 
 ## Test discipline (TDD)
 
@@ -54,10 +63,14 @@ This is the rule that overrides convenience:
 - `bin/cce` — executable entry point.
 - `lib/cce/` — implementation, one concern per file (see [`docs/architecture.md`](docs/architecture.md)).
 - `test/` — tests (written first); `test/fixture/` is the normative conformance corpus.
-- `docs/` — [`architecture.md`](docs/architecture.md), [`DECISIONS.md`](docs/DECISIONS.md),
-  [`TDD.md`](docs/TDD.md), [`BENCHMARKS.md`](docs/BENCHMARKS.md), [`getting-started.md`](docs/getting-started.md),
-  [`how-to.md`](docs/how-to.md).
-- `SPEC.md` — the authoritative specification.
+- `lib/cce/metrics*.rb`, `lib/cce/dashboard*.rb` — the v1.1 metrics/observability
+  subsystem (event log, recorder, pure aggregator, and the loopback dashboard
+  app/page/server). See [`docs/dashboard.md`](docs/dashboard.md).
+- `docs/` — [`architecture.md`](docs/architecture.md), [`dashboard.md`](docs/dashboard.md),
+  [`DECISIONS.md`](docs/DECISIONS.md), [`TDD.md`](docs/TDD.md), [`BENCHMARKS.md`](docs/BENCHMARKS.md),
+  [`getting-started.md`](docs/getting-started.md), [`how-to.md`](docs/how-to.md).
+- `SPEC.md` — the authoritative specification; `DASHBOARD-SPEC.md` — the v1.1
+  dashboard/observability addendum.
 
 ## Commit and PR conventions
 

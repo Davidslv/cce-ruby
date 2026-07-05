@@ -47,11 +47,20 @@ loaded through `lib/cce.rb`. Two data flows dominate: **index** (write path) and
 | `KeywordStore` | In-memory BM25 index (SPEC §6.3). |
 | `GraphStore` | File-level import graph + undirected neighbour lookup (SPEC §6.7). |
 | `Retriever` | The hybrid pipeline: intent → candidates → RRF → confidence → blend → penalty → diversity → graph (SPEC §6). |
-| `Store` | SQLite persistence of chunks, vectors, imports, metadata (SPEC §7). |
+| `Store` | SQLite persistence of chunks, vectors, imports, whole-file token counts, metadata (SPEC §7, DASHBOARD-SPEC §3). |
 | `Indexer` | Orchestrates the write path; reconstructs a `Retriever` from a store. |
 | `Conformance` | Fixture harness emitting deterministic `conformance.json` (SPEC §8). |
 | `Bench` | Benchmark runner + report generation (SPEC §10). |
-| `CLI` | Argument parsing and command dispatch (SPEC §9). |
+| `Metrics::*` / `Dashboard::*` | v1.1 observability: event log, recorder, pure aggregator, and the loopback dashboard app/page/server (DASHBOARD-SPEC). |
+| `CLI` | Argument parsing and command dispatch (SPEC §9; plus `feedback`/`dashboard`, DASHBOARD-SPEC §5). |
+
+The **v1.1 dashboard/observability subsystem** is documented separately in
+[`dashboard.md`](dashboard.md) (metrics pipeline, event schema, aggregation
+formulas, and its own "where this would strain" note). It layers cleanly on top
+of the engine: `index`/`search`/`feedback` append events to a persisted JSONL
+log, a **pure** aggregator turns that log into KPIs/north-stars/series, and a
+read-only, loopback-only web server renders it. It is the one place CCE uses
+wall-clock time (injected for tests); the core pipeline above is unchanged.
 
 ### Index (write path)
 

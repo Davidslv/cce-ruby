@@ -67,21 +67,42 @@ green. Every anchor and required case from SPEC §12 is covered.
 | Graph edge extraction + expansion (§6.7) | `GraphStoreTest`, `RetrieverTest#test_graph_expansion_*` |
 | CLI happy path + invalid input | `CLITest` |
 
+## v1.1 — Dashboard & observability (DASHBOARD-SPEC §8)
+
+Built test-first on the `feat/dashboard` branch, red → green, on top of the
+unchanged v1.0 engine. Order: event log → recorder → aggregator anchor → store
+file-token persistence → HTTP app/server → CLI wiring.
+
+| Required case (DASHBOARD-SPEC §8) | Test |
+|---|---|
+| Event append w/ injected clock + id source | `MetricsRecorderTest` |
+| `--no-metrics` / disabled suppresses writes | `MetricsRecorderTest#test_no_metrics_*`, `CLIMetricsTest#test_no_metrics_*` |
+| Corrupt/blank-line robustness; missing path fail-open | `MetricsEventLogTest` |
+| Whole-file token persistence (§3) + baseline sum | `StoreTest#test_file_token_counts_round_trip`, `CLIMetricsTest#test_search_baseline_*` |
+| Aggregator ANCHOR (§4.1) — exact | `MetricsAggregatorTest` |
+| Empty-log → valid "no data" aggregate | `MetricsAggregatorTest#test_empty_log_*` |
+| Feedback event + resolution into recent searches | `MetricsAggregatorTest#test_recent_searches_*`, `CLIMetricsTest#test_feedback_*` |
+| HTTP endpoints on an ephemeral loopback port | `DashboardServerTest`, `CLIMetricsTest#test_dashboard_command_serves_over_loopback` |
+
+The metrics/dashboard tests inject `FixedClock`/`SequenceIdSource` (never the real
+clock) and bind an ephemeral loopback port (never a real external network), so the
+suite stays deterministic and hermetic despite the feature being time-based.
+
 ## Final result
 
 ```
-84 runs, 213 assertions, 0 failures, 0 errors, 1 skips
+118 runs, 400 assertions, 0 failures, 0 errors, 1 skips
 
-Line Coverage: 94.19% (940 / 998)
-Branch Coverage: 72.76% (179 / 246)
+Line Coverage: 93.08% (1291 / 1387)
+Branch Coverage: 75.32% (238 / 316)
 ```
 
-- **Test count:** 84 tests (1 skipped: the live Ollama integration test, which
-  requires a running server and is intentionally excluded from the hermetic
-  default suite).
-- **Line coverage:** 94.19% overall (SimpleCov, `test/` and `vendor/` filtered).
-  This exceeds the §12 target of ≥85% of non-CLI logic; the CLI itself is also
-  exercised end-to-end including a real subprocess run.
+- **Test count:** 118 tests (84 from v1.0 + 34 for v1.1; 1 skipped: the live
+  Ollama integration test, requiring a running server and intentionally excluded
+  from the hermetic default suite).
+- **Line coverage:** 93.08% overall (SimpleCov, `test/` and `vendor/` filtered),
+  comfortably above the ≥85% target. The base engine's `conformance.json` remains
+  byte-for-byte identical to v1.0.
 
 The 1 skip is expected and hermetic. To run it: `CCE_OLLAMA_TEST=1 bundle exec
 rake test` with a local Ollama server on `:11434`.

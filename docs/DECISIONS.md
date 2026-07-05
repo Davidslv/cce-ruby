@@ -100,3 +100,70 @@ mistake. Both paths are covered by tests.
 
 **Decision:** Default store path is `<indexed-root>/.cce/index.db` (a hidden dir,
 excluded from the walk), per §7. Overridable with `--store`.
+
+## D13 — `search --json` becomes an object carrying `query_id` (DASHBOARD-SPEC §5)
+
+**Ambiguity:** SPEC v1.0 §9 defines `search --json` as a bare array of result
+objects; DASHBOARD-SPEC §5 says to add a **top-level** `query_id` field, which an
+array cannot carry. **Decision:** In v1.1, `search --json` emits an object
+`{"query_id": "<id>|null", "results": [ ...the v1.0 array... ]}`. The results
+array is unchanged, so consumers only adjust to read `.results`. `query_id` is
+`null` when metrics are disabled (`--no-metrics`). This is a documented v1.1
+output change; it does not touch `conformance.json` (which is produced by the
+Conformance module, not the CLI).
+
+## D14 — Metrics failures are silent (fail-open), not warned to stdout/stderr
+
+**Ambiguity:** DASHBOARD-SPEC §2 says a metrics write error should "log a warning
+and continue." **Decision:** `EventLog#append` swallows every error and returns
+`false` **without printing**. Printing to stderr/stdout from the metrics path
+risks corrupting `--json` output and machine consumers, and the spec's overriding
+requirement is that a metrics failure "must never break the command." Returning
+`false` satisfies fail-open; the warning is omitted deliberately. `cce feedback`
+is the one place we *do* warn (to stderr) — for an unknown `query-id` — because
+that is user-facing, explicit input, not a background write.
+
+## D15 — Metrics path derivation and the `<store-dir>/metrics.jsonl` location
+
+**Ambiguity:** DASHBOARD-SPEC §2 places the log in "the store dir" and §5 adds a
+`--metrics PATH`. **Decision:** Resolution order is: explicit `--metrics` wins;
+else the log sits **next to the store** (`File.dirname(store)/metrics.jsonl`);
+else under `<dir>/.cce/metrics.jsonl`. With the default store
+(`<dir>/.cce/index.db`) this is `<dir>/.cce/metrics.jsonl`, matching the spec's
+default `<indexed-dir>/.cce/`.
+
+## D16 — Search metrics reflect the full returned result set (incl. graph bonus)
+
+**Ambiguity:** DASHBOARD-SPEC §2.1 defines `served_tokens`/`baseline_tokens` over
+"the returned results" without stating whether import-graph bonus chunks count.
+**Decision:** They count — the event mirrors exactly what the user received. So
+with graph expansion on, bonus chunks contribute to `served_tokens` and their
+files to the distinct-file `baseline_tokens`. Rationale: the metric measures the
+real token counterfactual of *this* response.
+
+## D17 — `cce feedback` records even for an unknown `query-id`
+
+**Ambiguity:** DASHBOARD-SPEC §5 allows either recording-with-a-warning or a
+non-zero exit when the target id is absent. **Decision:** Record the feedback and
+print a warning to stderr, exiting `0`. The log is append-only and future-tolerant;
+a feedback event whose target has scrolled out of a rotated log (or was never
+found) is still valid data, and refusing it would lose a user's signal.
+
+## D18 — No config-file loading for metrics/dashboard in v1.1
+
+**Ambiguity:** DASHBOARD-SPEC §1 lists optional config keys (`dashboard.port`,
+`dashboard.input_price_per_million`, `metrics.enabled`). The base engine has no
+config-file mechanism. **Decision:** Honour these as **defaults + CLI flags**
+only: `--port` for the port, the `DEFAULT_INPUT_PRICE_PER_MILLION` constant for
+price, and `--no-metrics` for `metrics.enabled=false`. A config-file loader is
+out of scope for v1.1 (backlog), keeping parity with the base engine's
+constants-only approach.
+
+## D19 — Metrics subsystem is the one place wall-clock time is allowed
+
+**Decision (per DASHBOARD-SPEC §0):** `ts`/`id`/`generated_ts` use real wall clock
+and randomness, injected via `SystemClock`/`RandomIdSource` (production) and
+`FixedClock`/`SequenceIdSource`/`SequenceClock` (tests). The **aggregator** takes
+`now` as a parameter and contains no clock or randomness, so it stays pure and
+cross-language-identical (the §4.1 anchor). CLI metrics tests exercise the real
+clock but never assert on `ts`/`id`, so the suite stays deterministic.

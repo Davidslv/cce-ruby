@@ -84,6 +84,46 @@ bundle exec bin/cce conformance test/fixture -o conformance.json
 This is the gate that protects cross-implementation equivalence. A change that
 alters it is a spec revision (see [`../CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
+## Rate a search result (feedback)
+
+Every `cce search` prints a `query-id` and records a metrics event. Mark a result
+helpful or not so the dashboard can trend retrieval quality (v1.1):
+
+```sh
+bundle exec bin/cce search "hash the password" --dir path/to/repo
+#   → …results…
+#   → query-id: 3f9a1c2b7e04  ·  rate with: cce feedback 3f9a1c2b7e04 --helpful|--not-helpful
+
+bundle exec bin/cce feedback 3f9a1c2b7e04 --helpful --dir path/to/repo
+bundle exec bin/cce feedback 3f9a1c2b7e04 --not-helpful --note "wrong file" --dir path/to/repo
+```
+
+- Exactly one of `--helpful` / `--not-helpful` is required.
+- `--json` search output carries the id as a top-level `"query_id"`.
+- Feedback for an unknown id is still recorded (with a warning) — the log is
+  append-only and future-tolerant.
+- Skip recording on a one-off search with `--no-metrics`.
+
+## View the dashboard
+
+Serve the read-only, loopback-only metrics dashboard (v1.1):
+
+```sh
+bundle exec bin/cce dashboard --dir path/to/repo
+#   → CCE dashboard (read-only, loopback-only) at http://127.0.0.1:8787/
+#   → Press Ctrl-C to stop.
+```
+
+- Bound to `127.0.0.1` only; choose a port with `--port N` (default 8787), or an
+  ephemeral port with `--port 0`.
+- Point at a specific log with `--metrics PATH`, or a store/dir with
+  `--store`/`--dir`.
+- The page is fully self-contained (inline CSS/JS, hand-drawn SVG charts, no
+  external network). It also exposes `GET /api/metrics` and `GET /api/health`,
+  recomputed live from the log on each request.
+
+See [`dashboard.md`](dashboard.md) for the event schema and aggregation formulas.
+
 ## Switch to the Ollama embedder
 
 By default CCE uses the deterministic, offline `hash` embedder. To use a real
