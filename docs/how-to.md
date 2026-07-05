@@ -45,8 +45,20 @@ bundle exec bin/cce search "process payment" --dir path/to/repo --json --no-grap
 bundle exec bin/cce stats --dir path/to/repo
 ```
 
-Prints chunk/file counts, a per-language breakdown, average tokens per chunk,
-and the store size on disk.
+Prints chunk/file counts, a per-language breakdown, a per-`kind` breakdown (the
+exact tree-sitter node types), average tokens per chunk, and the store size on
+disk.
+
+## List and validate the language packs
+
+```sh
+bundle exec bin/cce packs              # list registered packs
+bundle exec bin/cce packs --validate   # run the three-layer validators; non-zero exit on failure
+```
+
+`packs --validate` runs the structural, grammar-binding, and behavioural checks
+over every pack. Each diagnostic names the pack, the offending member, the
+problem, and a fix. See [`adding-a-language.md`](adding-a-language.md) to add one.
 
 ## Run the benchmark
 
@@ -54,7 +66,7 @@ Benchmark retrieval quality and latency against a pinned real repository and
 write the report to `docs/BENCHMARKS.md`:
 
 ```sh
-bundle exec bin/cce bench path/to/flask
+bundle exec bin/cce bench path/to/sinatra
 ```
 
 - Provide your own labelled queries with `--queries FILE`.
@@ -64,10 +76,11 @@ See [`BENCHMARKS.md`](BENCHMARKS.md) for what the numbers mean.
 
 ## Run conformance
 
-Emit the deterministic conformance output over the normative fixture corpus:
+Emit the deterministic conformance output over the sample corpus (each chunk
+carries its `kind`):
 
 ```sh
-bundle exec bin/cce conformance test/fixture -o conformance.json
+bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 ```
 
 - The output is byte-for-byte reproducible run to run, and is designed to match
@@ -77,7 +90,7 @@ bundle exec bin/cce conformance test/fixture -o conformance.json
   committed `conformance.json`:
 
   ```sh
-  bundle exec bin/cce conformance test/fixture -o /tmp/conf.json
+  bundle exec bin/cce conformance test/fixture/samples -o /tmp/conf.json
   diff conformance.json /tmp/conf.json   # expect no output
   ```
 

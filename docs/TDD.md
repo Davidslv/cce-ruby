@@ -88,21 +88,39 @@ The metrics/dashboard tests inject `FixedClock`/`SequenceIdSource` (never the re
 clock) and bind an ephemeral loopback port (never a real external network), so the
 suite stays deterministic and hermetic despite the feature being time-based.
 
+## v2.0 — pluggable language packs (test-first)
+
+The v2 evolution was built the same way (SPEC-V2 §10). New tests were written
+first for: the registry (resolution, duplicate-extension rejection), each pack's
+self-test (counts, kinds, and exact imports over its §6 sample), all three
+validator layers with their diagnostics (including a deliberately-broken pack
+asserting a *helpful* message), the "core names no language" grep guard, the
+`kind` field end-to-end (index → persist → search/stats/conformance), the fixed
+module-fallback line count, and the v2 conformance output shape.
+
+- Notable red→green: the Ruby pack initially reported **two** class chunks for a
+  one-class sample. tree-sitter-ruby spells both the class definition node and the
+  `class` keyword token `"class"`; the fix is to chunk only **named** nodes
+  (`node.named?`) — recorded as decision D20. The behavioural self-test caught it.
+- Grammar node-type spellings were taken from the grammars (parse a snippet, print
+  the types), not from memory — exactly the loop the grammar-binding validator is
+  designed to make cheap.
+
 ## Final result
 
 ```
-118 runs, 400 assertions, 0 failures, 0 errors, 1 skips
+164 runs, 803 assertions, 0 failures, 0 errors, 1 skips
 
-Line Coverage: 93.08% (1291 / 1387)
-Branch Coverage: 75.32% (238 / 316)
+Line Coverage: 93.33% (1666 / 1785)
+Branch Coverage: 74.94% (314 / 419)
 ```
 
-- **Test count:** 118 tests (84 from v1.0 + 34 for v1.1; 1 skipped: the live
+- **Test count:** 164 tests (118 from v1.0/v1.1 + 46 for v2.0; 1 skipped: the live
   Ollama integration test, requiring a running server and intentionally excluded
   from the hermetic default suite).
-- **Line coverage:** 93.08% overall (SimpleCov, `test/` and `vendor/` filtered),
-  comfortably above the ≥85% target. The base engine's `conformance.json` remains
-  byte-for-byte identical to v1.0.
+- **Line coverage:** 93.33% overall (SimpleCov, `test/` and `vendor/` filtered),
+  at the ≥93% v2 target. `cce packs --validate` passes for all six packs, and the
+  v2 `conformance.json` over the seven samples is byte-for-byte reproducible.
 
 The 1 skip is expected and hermetic. To run it: `CCE_OLLAMA_TEST=1 bundle exec
 rake test` with a local Ollama server on `:11434`.

@@ -4,16 +4,23 @@
 > files with tree-sitter, embeds each chunk, stores a vector + BM25 keyword
 > index + import graph on disk in SQLite) and answers queries with hybrid
 > vector + BM25 + Reciprocal Rank Fusion retrieval. A clean-room, test-first
-> Ruby implementation of a shared specification (SPEC v1.0, plus the v1.1
-> dashboard/observability addendum); a sibling Rust implementation is built from
-> the identical spec.
+> Ruby implementation of a shared specification (SPEC v1.0, the v1.1
+> dashboard/observability addendum, and the v2.0 pluggable language-pack
+> evolution); a sibling Rust implementation is built from the identical spec.
+> v2.0: six languages ship as self-contained `LanguagePack`s (Ruby, Rust,
+> TypeScript, C, Python, JavaScript) resolved through a registry; the core engine
+> holds zero language-specific knowledge (a test guards it); every chunk carries a
+> `kind` (its exact tree-sitter node type); three-layer validators (`cce packs
+> --validate`) make adding a language safe and self-diagnosing.
 
 ## Start here
 
 - [README](README.md): What CCE is, provenance, quickstart, commands, and a map to the docs.
 - [SPEC.md](SPEC.md): The authoritative specification — the source of truth for every behaviour.
+- [SPEC-V2.md](SPEC-V2.md): The v2.0 evolution spec — pluggable language packs, `kind`, validators, conformance v2.
 - [Getting started](docs/getting-started.md): Install → first successful index and search, self-serve.
-- [How-to recipes](docs/how-to.md): Task recipes — index, search, benchmark, conformance, Ollama.
+- [How-to recipes](docs/how-to.md): Task recipes — index, search, packs, benchmark, conformance, Ollama.
+- [Adding a language](docs/adding-a-language.md): Step-by-step guide to adding a language pack, with a worked example.
 
 ## Design and decisions
 
@@ -31,9 +38,12 @@
 ## Key source files
 
 - [bin/cce](bin/cce): The executable entry point; delegates to CCE::CLI.
-- [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/conformance).
+- [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/packs/conformance).
 - [lib/cce/retriever.rb](lib/cce/retriever.rb): The hybrid retrieval pipeline (intent → RRF → confidence → penalty → diversity → graph).
-- [lib/cce/chunker.rb](lib/cce/chunker.rb): Tree-sitter AST chunking, import extraction, deterministic chunk id.
+- [lib/cce/chunker.rb](lib/cce/chunker.rb): Registry-driven AST chunking, import extraction, per-chunk `kind`, deterministic chunk id — language-blind (names no language).
+- [lib/cce/packs/](lib/cce/packs/): One `LanguagePack` per language (python, javascript, ruby, rust, typescript, c); each declares its node types, import rule, and self-test sample.
+- [lib/cce/pack_registry.rb](lib/cce/pack_registry.rb): Resolves a file to its pack by extension; rejects duplicate-extension registration.
+- [lib/cce/pack_validator.rb](lib/cce/pack_validator.rb): The three-layer pack validators (structural / grammar-binding with "did you mean" / behavioural self-test).
 - [lib/cce/store.rb](lib/cce/store.rb): SQLite persistence of chunks, vectors, imports, whole-file token counts, and embedder metadata.
 - [lib/cce/numeric_format.rb](lib/cce/numeric_format.rb): The determinism choke point — rounding, fixed-6 formatting, canonical sort.
 - [lib/cce/metrics_aggregator.rb](lib/cce/metrics_aggregator.rb): The v1.1 PURE aggregate function (totals, north-stars, daily series) — the cross-language dashboard anchor.
@@ -45,4 +55,4 @@ Note: the metrics/dashboard subsystem (`lib/cce/metrics*.rb`, `lib/cce/dashboard
 
 - [License (MIT)](LICENSE): MIT © 2026 David Silva.
 - [Security policy](SECURITY.md): Threat model (untrusted parsed input; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
-- [Changelog](CHANGELOG.md): Keep a Changelog format; 1.1.0 dashboard/observability, 1.0.0 initial release.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.

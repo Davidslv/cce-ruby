@@ -16,26 +16,74 @@ require_relative "store"
 
 module CCE
   module Bench
+    # Labelled query sets for the four benchmarked languages (SPEC-V2 §8):
     # query => acceptable path substrings (hit if any top-K file contains any).
-    DEFAULT_QUERIES = {
-      "where are blueprints registered"            => ["blueprints"],
-      "application factory and app configuration"  => ["app"],
-      "load configuration from environment or file" => ["config"],
-      "session cookie serialization"               => ["sessions"],
-      "url routing and rule mapping"               => %w[app blueprints],
-      "render a template with context"             => ["templating"],
-      "command line interface entry point"         => ["cli"],
-      "json encoder and decoder for responses"     => ["json"],
-      "request and response context management"    => ["ctx"],
-      "send a file as a response"                  => ["helpers"]
+    # Python/JavaScript are validated packs but are not benchmarked.
+    LANGUAGE_QUERIES = {
+      "ruby" => { # sinatra/sinatra
+        "route matching and dispatch"       => ["base"],
+        "render erb/haml template"          => ["base"],
+        "session and cookies"               => ["base"],
+        "mime type helpers"                 => ["base"],
+        "middleware stack"                  => ["base"],
+        "delegator methods"                 => ["base"],
+        "handle errors and show exceptions" => ["show_exceptions"],
+        "streaming responses"               => ["base"],
+        "rack response building"            => ["base"],
+        "url helpers"                       => ["base"]
+      }.freeze,
+      "rust" => { # sharkdp/hyperfine
+        "run a benchmark and measure timing"       => ["benchmark"],
+        "parse command line options"               => ["options"],
+        "export results as json"                   => ["export"],
+        "export as markdown"                       => ["export"],
+        "warmup runs"                              => ["benchmark"],
+        "shell spawning and command execution"     => ["command"],
+        "outlier detection statistics"             => ["outlier"],
+        "progress bar output"                      => ["benchmark"],
+        "parameter ranges"                         => ["parameter"],
+        "timing measurement"                       => ["timer"]
+      }.freeze,
+      "typescript" => { # pmndrs/zustand
+        "create a store"               => ["vanilla"],
+        "react hook to use the store"  => ["react"],
+        "persist middleware"           => ["middleware"],
+        "subscribe with selector"      => ["middleware"],
+        "shallow equality"             => ["shallow"],
+        "combine slices"               => ["middleware"],
+        "devtools integration"         => ["middleware"],
+        "set and get state"            => ["vanilla"],
+        "immer middleware"             => ["middleware"],
+        "context provider"             => ["context"]
+      }.freeze,
+      "c" => { # jqlang/jq
+        "parse a json value"               => ["jv"],
+        "builtin functions"                => ["builtin"],
+        "execute bytecode"                 => ["execute"],
+        "print/format json output"         => ["jv_print"],
+        "lexer/tokenizer"                  => ["lexer"],
+        "compile the program"              => ["compile"],
+        "object and array construction"    => ["jv"],
+        "decode number"                    => ["jv"],
+        "main entry point"                 => ["main"],
+        "unicode handling"                 => ["jv_unicode"]
+      }.freeze
     }.freeze
+
+    DEFAULT_LANG = "ruby"
+    # Backwards-compatible default query set (the Ruby/sinatra corpus).
+    DEFAULT_QUERIES = LANGUAGE_QUERIES.fetch(DEFAULT_LANG)
 
     module_function
 
     # @return [String] path to the written report (docs/BENCHMARKS.md)
-    def run(repo, store_path: nil, queries_file: nil, out: $stdout, repeats: 5, report_path: nil)
+    def run(repo, store_path: nil, queries_file: nil, out: $stdout, repeats: 5, report_path: nil, lang: nil)
       store_path ||= File.join(File.expand_path(repo), ".cce", "bench.db")
-      queries = queries_file ? load_queries(queries_file) : DEFAULT_QUERIES
+      queries = if queries_file
+                  load_queries(queries_file)
+                else
+                  LANGUAGE_QUERIES.fetch(lang || DEFAULT_LANG, DEFAULT_QUERIES)
+                end
 
       out.puts "Indexing #{repo} ..."
       summary = Indexer.index(repo, store_path: store_path, embedder: "hash")
@@ -60,6 +108,7 @@ module CCE
 
       metrics = {
         repo: repo,
+        language: lang || DEFAULT_LANG,
         commit: git_commit(repo),
         files: summary[:files_indexed],
         skipped: summary[:files_skipped],
@@ -148,7 +197,8 @@ module CCE
 
         | Field | Value |
         |---|---|
-        | Language | Ruby #{RUBY_VERSION} (#{RUBY_PLATFORM}) |
+        | Runtime | Ruby #{RUBY_VERSION} (#{RUBY_PLATFORM}) |
+        | Corpus language | #{m[:language]} |
         | Embedder | #{m[:embedder]} |
         | Corpus | #{m[:repo]} |
         | Corpus commit | `#{m[:commit]}` |

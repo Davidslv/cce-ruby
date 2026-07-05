@@ -7,10 +7,29 @@ are the same, framed here for agents.
 ## What this project is
 
 cce-ruby is a **clean-room, test-first Ruby implementation of
-[`SPEC.md`](SPEC.md)** (SPEC v1.0). A sibling Rust implementation is built from
-the *identical* spec. The spec is the source of truth for behaviour, and a
+[`SPEC.md`](SPEC.md)** (SPEC v1.0), extended by the v1.1 dashboard addendum
+([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)) and the **v2.0 pluggable language-pack
+evolution** ([`SPEC-V2.md`](SPEC-V2.md)). A sibling Rust implementation is built
+from the *identical* specs. The spec is the source of truth for behaviour, and a
 `conformance.json` proves the two implementations agree. Treat the spec as
 binding.
+
+### Language packs (v2.0) — the rule that keeps the core language-blind
+
+Language support is a **pluggable pack architecture**. Each language is one
+`LanguagePack` under `lib/cce/packs/`; the core resolves files through
+`PackRegistry` and holds **zero** language-specific knowledge.
+
+- **Never name a language (or an extension literal) in the core** —
+  `lib/cce/chunker.rb`, `lib/cce/indexer.rb`, `lib/cce/pack_registry.rb`. A test
+  (`test/core_language_guard_test.rb`) greps for this and will fail the build.
+  Language knowledge and its comments live **only inside packs**.
+- **Adding a language = add one pack file + register it in `lib/cce/packs.rb` +
+  make `cce packs --validate` pass.** No core edits. See
+  [`docs/adding-a-language.md`](docs/adding-a-language.md).
+- Every pack must pass all three validator layers (`test/pack_validator_test.rb`
+  is the CI gate over every registered pack). Get node-type spellings from the
+  grammar, not from memory — the grammar-binding lint suggests the nearest kind.
 
 ## The gate that must stay green
 
@@ -19,7 +38,7 @@ bundle exec rake test
 ```
 
 - This must pass (0 failures, 0 errors) before you consider any change done.
-- Baseline: **118 tests, ~93% line coverage** (SimpleCov). Do not let coverage
+- Baseline: **163 tests, ~93% line coverage** (SimpleCov). Do not let coverage
   regress. One test is skipped by design (the live Ollama integration test).
 - The suite is deterministic and hermetic — **no external network, no real clock,
   no randomness in assertions**. Do not introduce any of these into tests.
@@ -47,10 +66,11 @@ bundle exec rake test
 
 This is the rule that overrides convenience:
 
-- Running `bundle exec bin/cce conformance test/fixture` must still produce the
-  committed `conformance.json` **byte-for-byte**.
+- Running `bundle exec bin/cce conformance test/fixture/samples` must still
+  produce the committed `conformance.json` **byte-for-byte** (v2 chunks carry
+  `kind`; the sample fixtures are byte-identical across both implementations).
 - If your change alters that output, it is a **spec change**, not a bug fix.
-  Stop and treat it as such: update [`SPEC.md`](SPEC.md), record the reasoning in
+  Stop and treat it as such: update the spec, record the reasoning in
   [`docs/DECISIONS.md`](docs/DECISIONS.md), bump the version, and flag that the
   sibling Rust implementation must change in lockstep. Do not silently commit a
   changed `conformance.json`.
@@ -62,7 +82,10 @@ This is the rule that overrides convenience:
 
 - `bin/cce` — executable entry point.
 - `lib/cce/` — implementation, one concern per file (see [`docs/architecture.md`](docs/architecture.md)).
-- `test/` — tests (written first); `test/fixture/` is the normative conformance corpus.
+- `lib/cce/packs/` — one `LanguagePack` per language; `lib/cce/pack_registry.rb`,
+  `lib/cce/pack_validator.rb`, `lib/cce/packs.rb` — the v2.0 pack machinery.
+- `test/` — tests (written first); `test/fixture/samples/` holds the seven
+  byte-exact sample fixtures (pack self-tests + the conformance corpus).
 - `lib/cce/metrics*.rb`, `lib/cce/dashboard*.rb` — the v1.1 metrics/observability
   subsystem (event log, recorder, pure aggregator, and the loopback dashboard
   app/page/server). See [`docs/dashboard.md`](docs/dashboard.md).
@@ -70,7 +93,7 @@ This is the rule that overrides convenience:
   [`DECISIONS.md`](docs/DECISIONS.md), [`TDD.md`](docs/TDD.md), [`BENCHMARKS.md`](docs/BENCHMARKS.md),
   [`getting-started.md`](docs/getting-started.md), [`how-to.md`](docs/how-to.md).
 - `SPEC.md` — the authoritative specification; `DASHBOARD-SPEC.md` — the v1.1
-  dashboard/observability addendum.
+  dashboard/observability addendum; `SPEC-V2.md` — the v2.0 language-pack evolution.
 
 ## Commit and PR conventions
 
@@ -90,6 +113,7 @@ This is the rule that overrides convenience:
 - [ ] `bundle exec rake test` is green; coverage not regressed.
 - [ ] New/changed behaviour covered by tests, written test-first.
 - [ ] `conformance.json` unchanged (or an intentional, documented spec revision).
+- [ ] `cce packs --validate` passes; no language named in the core (the guard test is green).
 - [ ] Docs / `CHANGELOG.md` updated as needed.
 - [ ] No network, clock, or randomness added to tests.
 

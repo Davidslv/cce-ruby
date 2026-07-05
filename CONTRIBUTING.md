@@ -27,8 +27,11 @@ bundle install
 ### System dependencies
 
 Runtime chunking uses tree-sitter through the `ruby_tree_sitter` gem, with
-prebuilt Python/JavaScript grammar dylibs supplied by
-`tree_sitter_language_pack`. On most systems `bundle install` is enough. On a
+prebuilt grammar dylibs for all six supported languages (Ruby, Rust, TypeScript,
+C, Python, JavaScript) supplied by `tree_sitter_language_pack`. Each language is a
+self-contained pack under `lib/cce/packs/` — see
+[`docs/adding-a-language.md`](docs/adding-a-language.md). On most systems
+`bundle install` is enough. On a
 clean Linux box (including CI) you may need a C toolchain and SQLite headers for
 the native gem builds:
 

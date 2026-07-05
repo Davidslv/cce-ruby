@@ -257,16 +257,18 @@ module CCE
     def cmd_bench(argv)
       store = nil
       queries = nil
+      lang = nil
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--queries PATH") { |v| queries = v }
+        o.on("--lang NAME") { |v| lang = v }
       end
       rest = parser.parse(argv)
       repo = rest.shift
       return usage_error("bench requires a <repo-dir>") unless repo
       return usage_error("no such directory: #{repo}") unless File.directory?(repo)
 
-      report_path = Bench.run(repo, store_path: store, queries_file: queries, out: @out)
+      report_path = Bench.run(repo, store_path: store, queries_file: queries, lang: lang, out: @out)
       @out.puts "Wrote #{report_path}"
       0
     end
@@ -418,7 +420,7 @@ module CCE
           cce index <dir> [--store PATH] [--embedder hash|ollama] [--no-metrics]
           cce search <query> [--dir DIR | --store PATH] [--top-k N] [--no-graph] [--json] [--no-metrics]
           cce stats [--dir DIR | --store PATH]
-          cce bench <repo-dir> [--queries FILE] [--store PATH]
+          cce bench <repo-dir> [--lang ruby|rust|typescript|c] [--queries FILE] [--store PATH]
           cce packs [--validate]
           cce conformance <fixture-dir> [-o conformance.json]
           cce feedback <query-id> --helpful|--not-helpful [--note "..."] [--dir DIR | --store PATH]
