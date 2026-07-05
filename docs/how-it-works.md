@@ -64,7 +64,7 @@ not distracted by code it did not need.
                     256-d vector    (keywords)     (who imports who)    |
                           +--------------+--------------+---------------+
                                          v
-                             on-disk store   .cce/index.json
+                             on-disk store   .cce/index.db  (SQLite)
                              (nothing leaves your machine)
 ```
 
@@ -111,8 +111,18 @@ not distracted by code it did not need.
                       (secure by default; --allow-secrets to override)
 
   Observability   --- every search logs savings + quality -> `cce dashboard`
-                      shows "is this actually helping?" trended over time
+                      shows "is this actually helping?" trended over time, now
+                      with agent-vs-human, index-freshness & secret-safety panels
                         Savings 82.9% ^improving   Quality 0.797 ^improving
+
+  Workspaces      --- one root over many codebases; each member keeps its own
+                      store; federated search + cross-member dependency graph
+
+  CCE Sync        --- git remotes for the index: push/pull a content-addressed,
+                      byte-identical cache; offline-first; `verify` rebuilds it
+
+  CCE MCP         --- an MCP server so an agent (Claude Code) calls CCE as a
+                      native tool (`context_search`) instead of grepping
 
   Two engines     --- Ruby & Rust, byte-identical retrieval; Rust ~40x faster/query
 ```

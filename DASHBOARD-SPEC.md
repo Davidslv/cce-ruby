@@ -349,3 +349,46 @@ When done, report: what you built, new test count + coverage, confirmation the
 aggregator anchor passes and base `conformance.json` is unchanged, all gates
 green, and the `feat/dashboard` branch commit hash.
 ```
+
+---
+
+## Appendix A — v2.4.1 additive schema & panels (dashboard refresh)
+
+Normative, additive, and **backward-compatible**: every field below is optional
+and defaulted, so pre-v2.4 logs parse unchanged and the §4.1 anchor is unaffected
+(it asserts field-by-field, not whole-hash equality). Both engines expose the same
+`/api/metrics` keys.
+
+**Event fields.** `search` gains `source` (`"cli"` | `"mcp"`; absent ⇒ `"cli"`)
+and optional `package`. `index` gains `source` (`"local"` | `"sync-pull"`; absent
+⇒ `"local"`), `sensitive_skipped` (int; absent ⇒ 0), and optional `sha`.
+
+**Aggregate sections** (added to the §4 output; all computed **purely** from the
+log, so the served dashboard makes no network call):
+
+```json
+"by_source": {
+  "cli": {"searches":int,"tokens_saved":int,"mean_savings_ratio":number/*6dp*/},
+  "mcp": {"searches":int,"tokens_saved":int,"mean_savings_ratio":number/*6dp*/}
+},
+"freshness": {
+  "indexes":int, "last_indexed_ts":string|null,
+  "sha":string|null, "source":"local"|"sync-pull"|null   // from the latest index event
+},
+"secret_safety": { "sensitive_skipped":int }             // summed over index events
+```
+
+- `by_source`: bucket every search by `source` (`mcp` vs everything-else-as-`cli`).
+- `freshness`: from the most-recent `index` event by `ts`. **`behind_remote` is
+  intentionally excluded** (it needs a network round-trip) — it is reported by
+  `cce sync status` and the MCP `index_status` tool, not the offline dashboard.
+- `secret_safety.sensitive_skipped`: `Σ sensitive_skipped` over index events.
+
+**Workspace `by_package`** additionally carries `mean_top_score` per member (mean
+rank-1 score over that member's non-empty searches; `0.0` if none), alongside the
+existing `searches`, `tokens_saved`, `mean_savings_ratio`.
+
+The four refreshed page panels: **per-member breakdown** (workspace), **agent-vs-
+human** (`by_source`), **index freshness / sync** (`freshness`), and **secret-
+safety** (`secret_safety`). Posture is unchanged — loopback-only, read-only,
+self-contained, no external network.

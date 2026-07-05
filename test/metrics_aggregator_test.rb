@@ -94,6 +94,66 @@ class MetricsAggregatorTest < Minitest::Test
     assert_equal "none", by_id["dddddddddddd"][:feedback]
   end
 
+  # --- v2.4 dashboard-refresh panels (additive; anchor unaffected) ---
+
+  # Pre-v2.4 fixture has no `source` on its searches, so every search must fall
+  # into the "cli" bucket (before MCP shipped, all searches were human CLI).
+  def test_by_source_degrades_pre_v24_to_cli
+    bs = aggregate_anchor[:by_source]
+    assert_equal 4, bs[:cli][:searches]
+    assert_equal 53_000, bs[:cli][:tokens_saved]
+    assert_equal 0, bs[:mcp][:searches]
+    assert_equal 0, bs[:mcp][:tokens_saved]
+  end
+
+  def test_by_source_splits_cli_and_mcp
+    events = [
+      { "event" => "search", "ts" => "2026-07-04T10:00:00Z", "id" => "s1",
+        "source" => "cli", "tokens_saved" => 100, "savings_ratio" => 0.5, "result_count" => 1, "top_score" => 0.9 },
+      { "event" => "search", "ts" => "2026-07-04T11:00:00Z", "id" => "s2",
+        "source" => "mcp", "tokens_saved" => 300, "savings_ratio" => 0.75, "result_count" => 1, "top_score" => 0.8 }
+    ]
+    bs = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:by_source]
+    assert_equal 1, bs[:cli][:searches]
+    assert_equal 100, bs[:cli][:tokens_saved]
+    assert_equal 1, bs[:mcp][:searches]
+    assert_equal 300, bs[:mcp][:tokens_saved]
+    assert_equal "0.750000", r6(bs[:mcp][:mean_savings_ratio])
+  end
+
+  # Freshness reads the MOST RECENT index event (offline; no remote contact).
+  def test_freshness_from_latest_index_event
+    events = [
+      { "event" => "index", "ts" => "2026-07-01T09:00:00Z", "id" => "i1",
+        "source" => "local", "sha" => "oldsha000000" },
+      { "event" => "index", "ts" => "2026-07-04T09:00:00Z", "id" => "i2",
+        "source" => "sync-pull", "sha" => "newsha111111" }
+    ]
+    fr = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:freshness]
+    assert_equal 2, fr[:indexes]
+    assert_equal "newsha111111", fr[:sha]
+    assert_equal "sync-pull", fr[:source]
+    assert_equal "2026-07-04T09:00:00Z", fr[:last_indexed_ts]
+  end
+
+  def test_freshness_and_secret_safety_degrade_on_pre_v24_index
+    # Anchor fixture's single index event has neither sha nor source nor skips.
+    fr = aggregate_anchor[:freshness]
+    assert_equal 1, fr[:indexes]
+    assert_nil fr[:sha]
+    assert_equal "local", fr[:source] # absent source defaults to local
+    assert_equal 0, aggregate_anchor[:secret_safety][:sensitive_skipped]
+  end
+
+  def test_secret_safety_sums_sensitive_skipped
+    events = [
+      { "event" => "index", "ts" => "2026-07-01T09:00:00Z", "id" => "i1", "sensitive_skipped" => 2 },
+      { "event" => "index", "ts" => "2026-07-02T09:00:00Z", "id" => "i2", "sensitive_skipped" => 5 }
+    ]
+    ss = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:secret_safety]
+    assert_equal 7, ss[:sensitive_skipped]
+  end
+
   def test_empty_log_is_valid_no_data_aggregate
     agg = CCE::Metrics::Aggregator.aggregate(
       [], now: Time.utc(2026, 7, 5), price: 3.00
@@ -109,5 +169,12 @@ class MetricsAggregatorTest < Minitest::Test
     assert_nil agg[:north_star][:quality][:current][:helpful_rate]
     assert_equal [], agg[:series][:daily]
     assert_equal [], agg[:recent_searches]
+    # v2.4 panels are present and empty-safe.
+    assert_equal 0, agg[:by_source][:cli][:searches]
+    assert_equal 0, agg[:by_source][:mcp][:searches]
+    assert_equal 0, agg[:freshness][:indexes]
+    assert_nil agg[:freshness][:sha]
+    assert_nil agg[:freshness][:source]
+    assert_equal 0, agg[:secret_safety][:sensitive_skipped]
   end
 end

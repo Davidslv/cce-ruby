@@ -124,3 +124,11 @@ Branch Coverage: 74.94% (314 / 419)
 
 The 1 skip is expected and hermetic. To run it: `CCE_OLLAMA_TEST=1 bundle exec
 rake test` with a local Ollama server on `:11434`.
+
+> **Current baseline (v2.4.1).** The transcript above is the v2.0 milestone
+> snapshot. The suite has grown test-first through v2.1 (secrets), v2.2
+> (workspaces), v2.3 (Sync), v2.4 (MCP) and the v2.4.1 dashboard refresh to
+> **372 runs, 1553 assertions, 0 failures, 0 errors, 1 skip · line coverage
+> 94.78%** (≥ 93% held throughout). The single-repo `conformance.json` and the
+> cross-engine sync golden (`581cbd0f…`, `SYNC_FORMAT_VERSION "2.3"`) are
+> unchanged across all of it.

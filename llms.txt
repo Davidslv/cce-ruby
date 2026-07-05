@@ -4,14 +4,19 @@
 > files with tree-sitter, embeds each chunk, stores a vector + BM25 keyword
 > index + import graph on disk in SQLite) and answers queries with hybrid
 > vector + BM25 + Reciprocal Rank Fusion retrieval. A clean-room, test-first
-> Ruby implementation of a shared specification (SPEC v1.0, the v1.1
-> dashboard/observability addendum, and the v2.0 pluggable language-pack
-> evolution); a sibling Rust implementation is built from the identical spec.
-> v2.0: six languages ship as self-contained `LanguagePack`s (Ruby, Rust,
+> Ruby implementation of a shared specification, cumulative across versions:
+> SPEC v1.0 core, the v1.1 dashboard/observability addendum, v2.0 pluggable
+> language packs, v2.1 secret-scrubbing, v2.2 workspaces, v2.3 CCE Sync, and v2.4
+> CCE MCP; a sibling Rust implementation is built from the identical spec. The
+> current release is v2.4.1 — a dashboard refresh (agent-vs-human, index-freshness/
+> sync, and secret-safety panels) plus a verified, offline-first documentation
+> sweep. Six languages ship as self-contained `LanguagePack`s (Ruby, Rust,
 > TypeScript, C, Python, JavaScript) resolved through a registry; the core engine
 > holds zero language-specific knowledge (a test guards it); every chunk carries a
 > `kind` (its exact tree-sitter node type); three-layer validators (`cce packs
-> --validate`) make adding a language safe and self-diagnosing.
+> --validate`) make adding a language safe and self-diagnosing. Everything runs
+> fully offline except installing the gem, the optional localhost Ollama embedder,
+> and `cce sync push/pull` (git transport).
 
 ## Start here
 
@@ -21,13 +26,14 @@
 - [CCE Sync](docs/sync.md): v2.3 — offline-first, content-addressed cache over a git remote; byte-exact interchange artifact, content address, LFS backend, CI recipe, troubleshooting.
 - [CCE MCP](docs/mcp.md): v2.4 — an MCP server (`cce mcp`, JSON-RPC 2.0 over stdio) + `cce init` so an agent (Claude Code) uses CCE as a native tool; three tools (`context_search`, `index_status`, `record_feedback`), dashboard proof-of-use, sync freshness.
 - [Getting started](docs/getting-started.md): Install → first successful index and search, self-serve.
-- [How-to recipes](docs/how-to.md): Task recipes — index, search, packs, benchmark, conformance, Ollama.
+- [How-to recipes](docs/how-to.md): Task recipes — index, search, packs, benchmark, conformance, Ollama, workspace, CCE Sync, CCE MCP.
 - [Adding a language](docs/adding-a-language.md): Step-by-step guide to adding a language pack, with a worked example.
 
 ## Design and decisions
 
 - [Architecture](docs/architecture.md): Design goals, component/pipeline model, rationale, and where the design strains.
-- [Dashboard & observability](docs/dashboard.md): The v1.1 metrics pipeline (log → pure aggregator → API → self-contained page), event schema, and aggregation formulas.
+- [Dashboard & observability](docs/dashboard.md): The metrics pipeline (log → pure aggregator → API → self-contained page), event schema, aggregation formulas, and the v2.4.1 refreshed panels (agent-vs-human `by_source`, index-freshness `by_source`/`freshness`, `secret_safety`, workspace `by_package`).
+- [Offline-first verification](docs/VERIFIED.md): Recorded online AND offline cold-start transcripts proving index/search/stats/dashboard/workspace/mcp run with no network and no remote.
 - [Decisions](docs/DECISIONS.md): Every spec ambiguity resolved during implementation, with rationale.
 - [TDD log](docs/TDD.md): The test-first build order, final test count, and coverage.
 - [Benchmarks](docs/BENCHMARKS.md): Headline retrieval-quality and latency numbers.
@@ -61,4 +67,4 @@ Note: the metrics/dashboard subsystem (`lib/cce/metrics*.rb`, `lib/cce/dashboard
 
 - [License (MIT)](LICENSE): MIT © 2026 David Silva.
 - [Security policy](SECURITY.md): Threat model (untrusted parsed input; secret-safe-by-default indexing — sensitive files skipped + inline secrets redacted, `--allow-secrets` opts out; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
-- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.4.0 CCE MCP (agent tool + `cce init`), 2.3.0 CCE Sync (distributed cache), 2.2.0 workspaces, 2.1.0 secret & sensitive-file protection (secure-by-default), 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.4.1 dashboard refresh (agent-vs-human/freshness/secret-safety panels) + verified offline-first docs sweep, 2.4.0 CCE MCP (agent tool + `cce init`), 2.3.0 CCE Sync (distributed cache), 2.2.0 workspaces, 2.1.0 secret & sensitive-file protection (secure-by-default), 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.

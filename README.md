@@ -10,9 +10,14 @@ stores a vector + keyword index on disk, and answers queries with hybrid vector
 > from the specification in [`SPEC.md`](SPEC.md)** as an experiment. A sibling
 > implementation in Rust — built from the *identical* spec — lives at
 > [davidslv/cce-rust](https://github.com/davidslv/cce-rust). Both are **SPEC
-> v1.0** at the core, extended by the **v1.1 dashboard/observability addendum**
-> ([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)) and the **v2.0 pluggable
-> language-pack evolution** ([`SPEC-V2.md`](SPEC-V2.md)). The experiment (and what
+> v1.0** at the core, extended cumulatively by the **v1.1 dashboard/observability
+> addendum** ([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)), the **v2.0 pluggable
+> language packs** ([`SPEC-V2.md`](SPEC-V2.md)), **v2.1 secret-scrubbing**
+> ([`SPEC-V2.1.md`](SPEC-V2.1.md)), **v2.2 workspaces**
+> ([`SPEC-V2.2.md`](SPEC-V2.2.md)), **v2.3 CCE Sync**
+> ([`SPEC-SYNC.md`](SPEC-SYNC.md)), and **v2.4 CCE MCP**
+> ([`SPEC-MCP.md`](SPEC-MCP.md)). The current release, **v2.4.1**, is a dashboard
+> refresh + verified, offline-first documentation sweep. The experiment (and what
 > it says about specs as programs) is written up here:
 > [The spec was the program](https://davidslv.uk/2026/07/05/the-spec-was-the-program.html).
 
@@ -157,7 +162,7 @@ bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 | `index <dir> [--store PATH] [--embedder hash\|ollama] [--allow-secrets]` | Walk, chunk, embed, persist. Secret-safe by default; `--allow-secrets` opts out. |
 | `search <query> [--dir DIR \| --store PATH] [--top-k N] [--no-graph] [--json]` | Load store, run retrieval. |
 | `stats [--dir DIR \| --store PATH]` | Chunk/file counts, per-language and per-`kind` breakdown, avg tokens, store size. |
-| `bench <repo-dir> [--queries FILE] [--store PATH]` | Run the benchmark, write `docs/BENCHMARKS.md`. |
+| `bench <repo-dir> [--lang ruby\|rust\|typescript\|c] [--queries FILE] [--store PATH]` | Run the benchmark, write `docs/BENCHMARKS.md`. |
 | `packs [--validate]` | List registered language packs, or run the three-layer validators over every pack. |
 | `conformance <fixture-dir> [-o FILE]` | Emit the deterministic `conformance.json` (chunks include `kind`). |
 | `feedback <query-id> --helpful\|--not-helpful [--note "…"] [--dir DIR \| --store PATH]` | Rate a past search result (v1.1). |
@@ -349,6 +354,45 @@ a **ready-to-copy GitHub Actions CI recipe**, and troubleshooting are in
 [`docs/sync.md`](docs/sync.md). A verified, end-to-end cold-start transcript is in
 [`docs/VERIFIED.md`](docs/VERIFIED.md).
 
+## Best practices — CCE Sync & CCE MCP
+
+Distilled guidance for running Sync and MCP well; the full rationale is in
+[`docs/sync.md`](docs/sync.md) and [`docs/mcp.md`](docs/mcp.md).
+
+**CCE Sync**
+
+- **One sync repo per access boundary.** A reader of the sync cache repo can pull
+  every index in it, *independent of source-repo access*. Give the cache repo read
+  access equal to the intended audience of every repo cached in it; use separate
+  cache repos for compartmentalised projects.
+- **Let CI be the canonical pusher.** Push from CI on `main` (scope the push
+  credential to the **cache repo only**), so teammates only ever `pull`. A leaked
+  CI token then grants write to the cache, never to your source.
+- **`.gitignore` your `.cce/`.** The local index is a rebuildable cache, not source
+  — keep it out of the source repo. Sync moves it deliberately, via the cache repo.
+- **Single repo vs workspace.** Use a **single repo** for one codebase; use a
+  **workspace** when several related codebases share a root and you want one
+  federated search + a cross-member dependency graph (each member still keeps its
+  own isolated store and its own secret scrubbing).
+- **Trust, but verify.** `pull` trusts the artifact checksum; `cce sync verify`
+  re-indexes locally and compares, so you never have to trust the pusher. Only
+  reproducible `hash` indexes are shareable (Ollama indexes stay local).
+
+**CCE MCP**
+
+- **Wire it once with `cce init`, then confirm usage.** `cce init .` writes
+  `.mcp.json` + a `CLAUDE.md` block steering the agent to prefer `context_search`.
+  After restarting the editor, confirm the agent actually used CCE via
+  `cce dashboard` — the **Agent vs human** panel and `.cce/metrics.jsonl` show
+  every `context_search` the agent made.
+- **Combine with Sync for team-shared context.** `cce init --remote <sync-url>`
+  turns on `sync.auto_pull`, so `cce mcp` warms the local index from the CI-built
+  cache on startup (offline-safe; a soft dependency — MCP works fully without it).
+- **Secret-safe by default everywhere.** Indexing (CLI, workspace, MCP, and the
+  index CI pushes) skips sensitive files and redacts inline secrets before storage
+  unless you pass `--allow-secrets`. The dashboard's **secret-safety** panel shows
+  the redaction is working.
+
 ## Embedders
 
 - **`hash` (default):** a deterministic, model-free hashing embedder (FNV-1a
@@ -356,10 +400,17 @@ a **ready-to-copy GitHub Actions CI recipe**, and troubleshooting are in
   languages — this is what conformance and benchmarks use. **No network.**
 - **`ollama` (optional, opt-in):** talks to a local
   [Ollama](https://ollama.com/) server (`http://localhost:11434`, model
-  `nomic-embed-text`) behind the same interface. This is the **only** code path
-  that makes a network call, and only over localhost. Not covered by
-  conformance (model-dependent vectors). Falls back with a clear message when
-  the server is unreachable.
+  `nomic-embed-text`) behind the same interface. Among the **indexing/search**
+  paths this is the only one that makes a network call, and only over localhost.
+  Not covered by conformance (model-dependent vectors). Falls back with a clear
+  message when the server is unreachable.
+
+> **What touches the network, in full.** Only three things ever do: installing the
+> gem/grammars (one-time), the **optional** Ollama embedder above (localhost), and
+> `cce sync push`/`cce sync pull` (git transport to a configured remote).
+> `index`, `search`, `stats`, `dashboard` (loopback-only), `workspace`, and
+> `cce mcp` serving the local index make **no outbound network calls at all** —
+> see the [offline-first verification](docs/VERIFIED.md#offline-first-v241--online-and-offline-cold-start).
 
 ## Dashboard & observability
 
@@ -390,10 +441,23 @@ bundle exec bin/cce dashboard --dir path/to/repo
 #   → CCE dashboard (read-only, loopback-only) at http://127.0.0.1:8787/
 ```
 
+**Refreshed in v2.4.1** to surface what shipped since v1.1, the dashboard adds four
+panels (all computed offline from the log — no remote contact):
+
+- **Agent vs human** — CLI searches (you) vs MCP searches (your agent), from the
+  `source` field on each search event.
+- **Index freshness · sync** — the indexed `sha` and whether the index is `local`
+  or `sync-pull`ed. ("Behind remote" needs the network, so it lives in
+  `cce sync status`, not the offline dashboard.)
+- **Secret-safety** — the count of sensitive files the walker refused to read.
+- **Per-member breakdown** (`cce dashboard --workspace`) — savings, searches, and
+  retrieval quality per workspace member.
+
 The dashboard inlines all CSS/JS and draws its own SVG charts — **no external
 network, CDN, or remote fonts/scripts** — consistent with CCE's offline posture.
-It also exposes `GET /api/metrics` (the aggregate JSON) and `GET /api/health`.
-See [`docs/dashboard.md`](docs/dashboard.md) for the pipeline, event schema, and
+It also exposes `GET /api/metrics` (the aggregate JSON, including the
+`by_source`/`freshness`/`secret_safety` sections) and `GET /api/health`. See
+[`docs/dashboard.md`](docs/dashboard.md) for the pipeline, event schema, and
 aggregation formulas.
 
 ## Testing
@@ -402,7 +466,7 @@ aggregation formulas.
 bundle exec rake test
 ```
 
-The suite is deterministic and hermetic (no external network): **311 tests, ~94%
+The suite is deterministic and hermetic (no external network): **372 tests, ~94.8%
 line coverage** (SimpleCov; 1 skip is the live Ollama integration test, excluded
 from the default suite). CCE Sync tests run against a **local bare git repo**
 (`file://`) and do **not** require the `git-lfs` binary — the LFS path is a smoke
@@ -426,10 +490,10 @@ coverage breakdown.
 | [`docs/mcp.md`](docs/mcp.md) | CCE MCP: `cce init`, the `cce mcp` server, the three tools, how to confirm agent use, and sync freshness. |
 | [`docs/VERIFIED.md`](docs/VERIFIED.md) | The verified, cold-start end-to-end sync + MCP walkthrough transcripts. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Newcomer path: install → first successful index + search. |
-| [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, switch to Ollama. |
+| [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, Ollama, workspace, Sync, MCP. |
 | [`docs/adding-a-language.md`](docs/adding-a-language.md) | Step-by-step guide to adding a language pack, with a worked example. |
 | [`docs/architecture.md`](docs/architecture.md) | Design goals, component model, the language-pack model, and where the design would strain. |
-| [`docs/dashboard.md`](docs/dashboard.md) | The v1.1 metrics pipeline, event schema, aggregation formulas, and strain points. |
+| [`docs/dashboard.md`](docs/dashboard.md) | The metrics pipeline, event schema, aggregation formulas, the v2.4.1 refreshed panels, and strain points. |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Every spec ambiguity resolved, with rationale. |
 | [`docs/TDD.md`](docs/TDD.md) | The test-first build log, test count, and coverage. |
 | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Headline retrieval-quality and latency numbers. |

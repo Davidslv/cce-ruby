@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-07-05
+
+The **closing task of the v2.4 milestone**: a dashboard refresh that surfaces the
+capabilities shipped since v1.1 (workspaces, Sync, MCP, secret-scrubbing), plus a
+verified, gapless documentation sweep and a mandatory offline-first verification.
+Additive patch release — the CLI, the single-repo `conformance.json`, and the
+cross-engine **sync golden checksum** (`581cbd0f…`,
+`SYNC_FORMAT_VERSION = "2.3"`) are all byte-for-byte unchanged. Old metrics logs
+still parse: every new event field is optional and degrades gracefully.
+
+### Added
+
+- **Metrics schema (additive).** `search` events now carry `source` (`"cli"` for the
+  human CLI path, `"mcp"` for the agent/`context_search` path) and an optional
+  `package` (workspace filter). `index` events now carry `sha` (the VCS commit
+  indexed/pulled), `source` (`"local"` for `cce index`, `"sync-pull"` for an index
+  installed by `cce sync pull`), and `sensitive_skipped` (files the secret-safe
+  walker refused to read). Every field is optional/defaulted so pre-v2.4 logs parse
+  unchanged and absent fields degrade gracefully in the aggregator.
+- **Dashboard panels (`/api/metrics` gains three sections; workspace `by_package`
+  gains one field).**
+  - `by_source` — agent-vs-human usage: `{ cli:{searches,tokens_saved,
+    mean_savings_ratio}, mcp:{…} }`. Pre-v2.4 searches bucket as `cli`.
+  - `freshness` — index freshness / sync status computed **offline** from index
+    events: `{ indexes, last_indexed_ts, sha, source }`. "Behind remote" stays in
+    `cce sync status` (an explicit network action), keeping the dashboard offline.
+  - `secret_safety` — `{ sensitive_skipped }`, summed across index events.
+  - Workspace `by_package[member]` gains `mean_top_score` (per-member retrieval
+    quality) alongside `searches`, `tokens_saved`, `mean_savings_ratio`.
+  - The self-contained dashboard page renders all four (agent-vs-human, index
+    freshness · sync · secret-safety, per-member breakdown), staying loopback-only,
+    read-only, and self-contained.
+- **Documentation sweep.** Every doc audited and brought current to shipped v2.4
+  behaviour, with copy-pasteable, output-backed examples for single-repo · workspace
+  · Sync · MCP · dashboard; macOS **and** Ubuntu setup with explicit prerequisites
+  (toolchain, C compiler, git, git-LFS); a Best-Practices section for Sync + MCP; and
+  a dedicated, **verified offline-first** section.
+- **`docs/VERIFIED.md`** records both an **online** and an **offline** cold-start
+  transcript (real captured runs) proving `index`, `search`, `stats`, `dashboard`,
+  `workspace`, and `cce mcp` (serving the local index) all work with no network and
+  no remote.
+
 ## [2.4.0] - 2026-07-05
 
 CCE MCP (SPEC-MCP) — a **Model Context Protocol server** so an agent (Claude Code,
@@ -76,7 +118,7 @@ byte-for-byte unchanged.
 
 ### Added
 
-- **Portable interchange artifact (SPEC-SYNC §2 + SPEC-SYNC-RECONCILE).**
+- **Portable interchange artifact (SPEC-SYNC §2, reconciled canonical format).**
   `CCE::Sync::Artifact` exports a store to the single canonical, byte-exact stream
   both engines reconciled on: a manifest line (keys `cce_version`, `checksum`,
   `chunk_count`, `embedder`, `file_tokens`, `pack_set_id`, `repo_id`, `sha`) → one

@@ -49,7 +49,10 @@ module CCE
             quality: quality_north_star(cur_searches, prior_searches, cur_feedback, prior_feedback)
           },
           series: { daily: daily_series(searches, feedbacks) },
-          recent_searches: recent_searches(searches, feedbacks)
+          recent_searches: recent_searches(searches, feedbacks),
+          by_source: by_source(searches),
+          freshness: freshness(indexes),
+          secret_safety: secret_safety(indexes)
         }
       end
 
@@ -189,6 +192,49 @@ module CCE
           map[f["target_id"]] = f["helpful"] ? "helpful" : "not_helpful"
         end
         map
+      end
+
+      # ---- v2.4 panels: agent-vs-human, freshness, secret-safety --------------
+
+      # Agent-vs-human split (DASHBOARD refresh §Part 1b). Buckets EVERY search by
+      # its `source` — "mcp" is the agent/context_search path, everything else
+      # (including pre-v2.4 events with no `source`) counts as "cli", since before
+      # MCP shipped every search was a human CLI search.
+      def by_source(searches)
+        cli = searches.reject { |s| s["source"] == "mcp" }
+        mcp = searches.select { |s| s["source"] == "mcp" }
+        { cli: source_bucket(cli), mcp: source_bucket(mcp) }
+      end
+
+      def source_bucket(searches)
+        {
+          searches: searches.length,
+          tokens_saved: searches.sum { |s| s["tokens_saved"].to_i },
+          mean_savings_ratio: r6(mean_savings_ratio(searches))
+        }
+      end
+
+      # Index freshness / sync status (DASHBOARD refresh §Part 1c), derived PURELY
+      # from index events so the dashboard stays offline (no remote contact): the
+      # most-recent index event gives the indexed `sha` and its `source` (local vs
+      # sync-pull). "Behind remote" is intentionally NOT computed here — it needs a
+      # network round-trip, so it lives in `cce sync status` / the MCP index_status
+      # tool, keeping the served dashboard fully offline.
+      def freshness(indexes)
+        latest = indexes.max_by { |e| ts(e) || Time.at(0) }
+        {
+          indexes: indexes.length,
+          last_indexed_ts: latest && latest["ts"],
+          sha: latest && latest["sha"],
+          source: latest ? (latest["source"] || "local") : nil
+        }
+      end
+
+      # Secret-safety reassurance (DASHBOARD refresh §Part 1d): how many sensitive
+      # files the walker refused to read, summed across every index event (absent
+      # field contributes 0, so pre-v2.4 logs read as "0 skipped").
+      def secret_safety(indexes)
+        { sensitive_skipped: indexes.sum { |e| e["sensitive_skipped"].to_i } }
       end
 
       # ---- shared measures -----------------------------------------------------

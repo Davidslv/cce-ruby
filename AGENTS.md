@@ -7,12 +7,20 @@ are the same, framed here for agents.
 ## What this project is
 
 cce-ruby is a **clean-room, test-first Ruby implementation of
-[`SPEC.md`](SPEC.md)** (SPEC v1.0), extended by the v1.1 dashboard addendum
-([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)) and the **v2.0 pluggable language-pack
-evolution** ([`SPEC-V2.md`](SPEC-V2.md)). A sibling Rust implementation is built
-from the *identical* specs. The spec is the source of truth for behaviour, and a
-`conformance.json` proves the two implementations agree. Treat the spec as
-binding.
+[`SPEC.md`](SPEC.md)** (SPEC v1.0), extended cumulatively by the v1.1 dashboard
+addendum ([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)), v2.0 pluggable language packs
+([`SPEC-V2.md`](SPEC-V2.md)), v2.1 secret-scrubbing ([`SPEC-V2.1.md`](SPEC-V2.1.md)),
+v2.2 workspaces ([`SPEC-V2.2.md`](SPEC-V2.2.md)), v2.3 CCE Sync
+([`SPEC-SYNC.md`](SPEC-SYNC.md)), and v2.4 CCE MCP ([`SPEC-MCP.md`](SPEC-MCP.md)).
+The current release is **v2.4.1** (a dashboard refresh + verified offline-first
+docs sweep). A sibling Rust implementation is built from the *identical* specs. The
+spec is the source of truth for behaviour, and a `conformance.json` proves the two
+implementations agree. Treat the spec as binding.
+
+Two invariants that must NOT move on a version bump: the single-repo
+`conformance.json` stays byte-identical, and the cross-engine sync golden
+(`581cbd0f…`, `SYNC_FORMAT_VERSION = "2.3"` in `lib/cce/sync.rb`) is decoupled from
+`CCE::VERSION` — never let an app-version bump change either.
 
 ### Language packs (v2.0) — the rule that keeps the core language-blind
 
@@ -38,8 +46,8 @@ bundle exec rake test
 ```
 
 - This must pass (0 failures, 0 errors) before you consider any change done.
-- Baseline: **163 tests, ~93% line coverage** (SimpleCov). Do not let coverage
-  regress. One test is skipped by design (the live Ollama integration test).
+- Baseline: **372 tests, ~94.8% line coverage** (SimpleCov; ≥ 93% required). Do not
+  let coverage regress. One test is skipped by design (the live Ollama integration test).
 - The suite is deterministic and hermetic — **no external network, no real clock,
   no randomness in assertions**. Do not introduce any of these into tests.
 - **Exception (v1.1):** the metrics/dashboard subsystem is the ONE place CCE uses
@@ -131,5 +139,9 @@ This is the rule that overrides convenience:
 - Do not run `git init`, create a GitHub repo, or push unless explicitly asked.
 - Do not add dependencies casually — runtime deps are pinned in the `Gemfile`
   for a reason. Discuss additions in an issue first.
-- Do not add network calls to any path except the existing opt-in, localhost-only
-  Ollama embedder.
+- Do not add network calls to any path except the three that already have them:
+  the opt-in, localhost-only Ollama embedder, and `cce sync push`/`pull` (git
+  transport to a configured remote). `index`/`search`/`stats`/`dashboard`/
+  `workspace`/`mcp` are offline and must stay that way; the dashboard binds
+  loopback only. The offline-first guarantee is verified in
+  [`docs/VERIFIED.md`](docs/VERIFIED.md) — keep it true.

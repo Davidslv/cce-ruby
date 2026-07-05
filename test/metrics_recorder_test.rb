@@ -132,6 +132,51 @@ class MetricsRecorderTest < Minitest::Test
       assert_in_delta 740.0, event["duration_ms"], 1e-12
       assert_equal "hash", event["embedder"]
       assert_equal true, event["full"]
+      # v2.4 additive defaults: local source, no sha, zero sensitive skips.
+      assert_equal "local", event["source"]
+      assert_equal 0, event["sensitive_skipped"]
+      refute event.key?("sha")
+    end
+  end
+
+  # --- v2.4 additive schema: search `source`/`package`, index `sha`/`source`/skips ---
+
+  def test_search_source_defaults_to_cli
+    with_tmpdir do |dir|
+      _log, rec = build(dir)
+      event = rec.record_search(
+        query: "q", top_k: 5, graph_enabled: true, embedder: "hash",
+        results: sample_results, file_token_counts: {}, latency_ms: 1.0
+      )
+      assert_equal "cli", event["source"]
+      refute event.key?("package") # nil package is omitted, not stored as null
+    end
+  end
+
+  def test_search_source_mcp_and_package_are_tagged
+    with_tmpdir do |dir|
+      _log, rec = build(dir)
+      event = rec.record_search(
+        query: "q", top_k: 5, graph_enabled: true, embedder: "hash",
+        results: sample_results, file_token_counts: {}, latency_ms: 1.0,
+        source: "mcp", package: "billing"
+      )
+      assert_equal "mcp", event["source"]
+      assert_equal "billing", event["package"]
+    end
+  end
+
+  def test_index_carries_sha_source_and_sensitive_skipped
+    with_tmpdir do |dir|
+      _log, rec = build(dir)
+      event = rec.record_index(
+        files_indexed: 10, chunks: 100, index_bytes: 5000, duration_ms: 200.0,
+        embedder: "hash", full: true, sha: "abc123def456", source: "sync-pull",
+        sensitive_skipped: 3
+      )
+      assert_equal "abc123def456", event["sha"]
+      assert_equal "sync-pull", event["source"]
+      assert_equal 3, event["sensitive_skipped"]
     end
   end
 

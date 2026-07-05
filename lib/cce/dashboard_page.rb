@@ -161,6 +161,67 @@ module CCE
               ]);
             }
 
+            function statRow(cells) {
+              return $("div", { class: "kpis", style: "margin:6px 0 0" }, cells.map(c => kpi(c[0], c[1])));
+            }
+
+            // v2.4 · Agent-vs-human: how much is the agent (MCP) leaning on CCE vs the human CLI.
+            function agentHumanPanel(bs) {
+              bs = bs || { cli: { searches: 0, tokens_saved: 0, mean_savings_ratio: 0 }, mcp: { searches: 0, tokens_saved: 0, mean_savings_ratio: 0 } };
+              const total = bs.cli.searches + bs.mcp.searches;
+              const agentPct = total ? bs.mcp.searches / total : 0;
+              return $("div", { class: "panel" }, [
+                $("h2", { text: "Agent vs human usage" }),
+                $("div", { class: "hint", text: "CLI searches (you) vs MCP searches (your agent). How much is the agent leaning on CCE?" }),
+                $("div", { class: "delta" }, [$("div", { class: "big", text: fmtPct(agentPct) }), $("div", { class: "dir flat", text: "agent share" })]),
+                statRow([["CLI searches", fmtInt(bs.cli.searches)], ["MCP searches", fmtInt(bs.mcp.searches)]]),
+                statRow([["CLI tokens saved", fmtInt(bs.cli.tokens_saved)], ["MCP tokens saved", fmtInt(bs.mcp.tokens_saved)]])
+              ]);
+            }
+
+            // v2.4 · Index freshness / sync status + secret-safety reassurance.
+            function freshnessPanel(fr, ss) {
+              fr = fr || { indexes: 0, last_indexed_ts: null, sha: null, source: null };
+              ss = ss || { sensitive_skipped: 0 };
+              const shortSha = fr.sha ? String(fr.sha).slice(0, 12) : "—";
+              const src = fr.source ? (fr.source === "sync-pull" ? "pulled from remote" : "local index") : "—";
+              return $("div", { class: "panel" }, [
+                $("h2", { text: "Index freshness · sync · secret-safety" }),
+                $("div", { class: "hint", text: "Is my context current, and is the redaction working? (Behind-remote is shown by `cce sync status`, an explicit network action.)" }),
+                statRow([["Indexed sha", shortSha], ["Source", src]]),
+                statRow([["Last indexed", fr.last_indexed_ts || "—"], ["Index runs", fmtInt(fr.indexes)]]),
+                statRow([["Sensitive files skipped", fmtInt(ss.sensitive_skipped)], ["Secret-safe", ss.sensitive_skipped >= 0 ? "on" : "—"]])
+              ]);
+            }
+
+            // v2.4 · Per-member / per-package breakdown (workspace): where CCE helps most.
+            function byPackagePanel(bp) {
+              const names = Object.keys(bp).sort();
+              const rows = names.map(name => {
+                const p = bp[name];
+                return $("tr", {}, [
+                  $("td", { text: name }),
+                  $("td", { class: "num", text: fmtInt(p.searches) }),
+                  $("td", { class: "num", text: fmtInt(p.tokens_saved) }),
+                  $("td", { class: "num", text: fmtPct(p.mean_savings_ratio) }),
+                  $("td", { class: "num", text: fmt3(p.mean_top_score) })
+                ]);
+              });
+              const table = $("table", {}, [
+                $("thead", {}, [$("tr", {}, [
+                  $("th", { text: "Member / package" }), $("th", { class: "num", text: "Searches" }),
+                  $("th", { class: "num", text: "Tokens saved" }), $("th", { class: "num", text: "Mean savings" }),
+                  $("th", { class: "num", text: "Mean top score" })
+                ])]),
+                $("tbody", {}, rows)
+              ]);
+              return $("div", { class: "panel", style: "margin-top:8px" }, [
+                $("h2", { text: "Per-member breakdown" }),
+                $("div", { class: "hint", text: "Where in the ecosystem CCE is helping most (workspace mode)." }),
+                $("div", { style: "overflow-x:auto" }, [table])
+              ]);
+            }
+
             function render(m) {
               const app = document.getElementById("app");
               app.textContent = "";
@@ -206,6 +267,12 @@ module CCE
                 $("div", { class: "panel" }, [$("h2", { text: "Empty-result rate / day" }), $("div", { class: "hint", text: "Share of searches returning nothing." }), lineChart(daily, d => d.empty_rate, { aria: "empty rate" })]),
                 $("div", { class: "panel" }, [$("h2", { text: "Helpful vs not-helpful / day" }), $("div", { class: "hint", text: "Feedback split." }), barChart(daily, d => (d.helpful + d.not_helpful), { aria: "feedback volume" })])
               ]));
+
+              // v2.4 · Agent-vs-human usage (MCP vs CLI) + index freshness / sync.
+              app.appendChild($("div", { class: "ns" }, [agentHumanPanel(m.by_source), freshnessPanel(m.freshness, m.secret_safety)]));
+
+              // v2.4 · Per-member / per-package breakdown (workspace only).
+              if (m.by_package && Object.keys(m.by_package).length) app.appendChild(byPackagePanel(m.by_package));
 
               // Recent searches table.
               const rows = (m.recent_searches || []).map(r => $("tr", {}, [

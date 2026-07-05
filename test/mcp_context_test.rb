@@ -48,6 +48,9 @@ class McpContextTest < Minitest::Test
       log = File.join(dir, ".cce", "metrics.jsonl")
       ev = File.readlines(log).map { |l| JSON.parse(l) }.find { |e| e["event"] == "search" }
       assert_equal 5, ev["top_k"]
+      # v2.4: the MCP/agent path tags its searches so the dashboard can split
+      # agent-vs-human usage.
+      assert_equal "mcp", ev["source"]
     end
   end
 

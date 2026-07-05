@@ -53,6 +53,19 @@ class SyncCommandsTest < Minitest::Test
     end
   end
 
+  def test_pull_records_sync_pull_index_event_for_freshness_panel
+    with_project do |root, sha, remote, _cache|
+      CCE::Indexer.index(root, store_path: File.join(root, ".cce", "index.db"))
+      commands(root, remote).push
+      commands(root, remote).pull(commit: sha, force: true)
+      mpath = File.join(root, ".cce", CCE::Metrics::FILE)
+      events = CCE::Metrics::EventLog.new(mpath).read[:events]
+      pull_ev = events.find { |e| e["event"] == "index" && e["source"] == "sync-pull" }
+      refute_nil pull_ev, "pull should append a sync-pull index event"
+      assert_equal sha, pull_ev["sha"]
+    end
+  end
+
   def test_push_indexes_when_no_store_present
     with_project do |root, sha, remote, _cache|
       refute File.exist?(File.join(root, ".cce", "index.db"))

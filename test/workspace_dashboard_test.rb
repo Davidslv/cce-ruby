@@ -47,6 +47,9 @@ class WorkspaceDashboardTest < Minitest::Test
     assert_in_delta 0.6, by["app"][:mean_savings_ratio], 1e-9
     assert_equal 1, by["billing"][:searches]
     assert_equal 200, by["billing"][:tokens_saved]
+    # v2.4: per-member retrieval quality (mean rank-1 score over non-empty searches).
+    assert_in_delta 0.9, by["app"][:mean_top_score], 1e-9
+    assert_in_delta 0.9, by["billing"][:mean_top_score], 1e-9
   end
 
   def test_by_package_sum_equals_total
