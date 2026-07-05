@@ -167,3 +167,85 @@ and randomness, injected via `SystemClock`/`RandomIdSource` (production) and
 `now` as a parameter and contains no clock or randomness, so it stays pure and
 cross-language-identical (the §4.1 anchor). CLI metrics tests exercise the real
 clock but never assert on `ts`/`id`, so the suite stays deterministic.
+
+---
+
+# v2.0 decisions (SPEC-V2 — pluggable language packs)
+
+## D20 — Match only *named* tree-sitter nodes for chunking
+
+**Ambiguity:** SPEC-V2 §1 says "for every node whose type is in `function_types`
+/ `class_types` emit a chunk". In several grammars a definition node and its
+keyword token share the same type *string* — e.g. tree-sitter-ruby spells both
+the class definition and the `class` keyword token `"class"` (and likewise
+`"module"`). A naive walk that matches on the type string alone double-counts,
+emitting a spurious 5-character "class" chunk for the keyword. **Decision:** Emit
+a chunk only for **named** nodes (`node.named?`) whose type matches. The keyword
+token is anonymous; the definition is named. This is correct for every grammar
+(all target node types are named rules) and deterministic across implementations,
+since a naive Rust walk over `node.kind()` would hit the same collision and a
+Rust agent reading this spec resolves it the same way. The validator's behavioural
+self-test applies the same named-node filter.
+
+## D21 — Ruby/Rust/C import extraction detail
+
+**Ambiguity:** SPEC-V2 §2 gives the intent ("first path segment", "last segment
+stem", "#include basename") but leaves node-walk detail to the grammar.
+**Decisions:**
+- **ruby:** walk `call` nodes; when the callee identifier is `require` /
+  `require_relative`, read the `argument_list`'s `string` → `string_content` and
+  take the last "/"-segment's stem (`require "a/b.rb"` → `b`).
+- **rust:** walk `use_declaration`; descend the leftmost child of nested
+  `scoped_identifier`s to the first path root (`identifier`/`crate`/`self`/
+  `super`) and take its text (`use std::collections::HashMap` → `std`). `mod
+  name;` is **not** treated as an import — SPEC-V2 §2 marks it optional, and
+  omitting it minimises any risk of divergence from the sibling implementation on
+  the benchmark corpora (the conformance samples contain no `mod`).
+- **c:** walk `preproc_include`; a `system_lib_string` (`<stdlib.h>`) is stripped
+  of `<>`, a `string_literal` (`"store.h"`) of its quotes, then the basename
+  without extension is taken (`stdlib`, `store`).
+
+## D22 — Scoped ES-module specifiers kept whole
+
+**Ambiguity:** SPEC-V2 §2 says the TS/JS rule takes "the first path segment", but
+also that `"@scope/pkg"` → `@scope/pkg`. **Decision:** For an ES-module specifier
+that starts with `@`, keep the first **two** segments (`@scope/pkg`); otherwise
+take the first segment, after dropping any leading `./` / `../`. Shared by the
+JavaScript and TypeScript packs (in `packs/es_modules.rb`, inside the packs
+namespace — never in core). The conformance samples import only `"fs"`, so this
+does not affect the cross-language gate.
+
+## D23 — `kind` = exact node type; `chunk_type` unchanged; `kind` not in the id
+
+**Decision (per SPEC-V2 §3):** Every chunk carries `kind` = the exact tree-sitter
+node type that produced it (`"module"` for the fallback). The coarse `chunk_type`
+bucket (`function`/`class`/`module`) is unchanged because retrieval ranks on
+content and path, not the label. `kind` is carried through persistence (a new
+`kind` column), surfaced in `search`/`stats`/dashboard/conformance, and is
+**deliberately excluded from `chunk_id`** so v1 ids are preserved and both
+implementations agree trivially.
+
+## D24 — Fallback `end_line` restated in byte terms
+
+**Decision (per SPEC-V2 §4):** The fallback chunk's
+`end_line = content.b.count("\n") + 1` — the number of `"\n"` **bytes** + 1, so a
+file ending in a newline still counts that trailing line. This matches D2's
+result exactly but is now stated in byte terms so both implementations are
+unambiguous, closing the one v1 cross-language divergence.
+
+## D25 — `sample` inlined in each pack, guarded against fixture drift
+
+**Ambiguity:** SPEC-V2 §1 makes each pack carry a `sample`, and §6 also ships the
+same bytes as fixtures under `test/fixture/samples/`. **Decision:** Inline the
+`sample` in the pack (so `cce packs --validate` is fully self-contained at
+runtime, independent of the test tree) **and** add a test asserting each pack's
+`sample` equals its shipped fixture byte-for-byte. Two sources of truth, pinned
+equal by a test — the fixture bytes remain the cross-language contract.
+
+## D26 — Conformance keeps the query section, adds `kind`
+
+**Ambiguity:** SPEC-V2 §7 says the base conformance query section "may be dropped
+or kept; the chunk section is the gate." **Decision:** Keep the query block
+(still deterministic and cross-language-identical) and add `kind` to the chunk
+manifest. The chunk section over the seven samples is the hard gate; keeping the
+query block costs nothing and preserves continuity with v1 tooling.

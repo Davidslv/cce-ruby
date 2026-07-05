@@ -97,7 +97,7 @@ class ChunkerTest < Minitest::Test
   end
 
   def test_python_imports
-    imports = CCE::Chunker.extract_imports("import os.path\nfrom pkg.sub import x\nimport sys\n", "python")
+    imports = CCE::Chunker.extract_imports("import os.path\nfrom pkg.sub import x\nimport sys\n", "mod.py")
     assert_equal %w[os pkg sys], imports
   end
 
@@ -116,13 +116,13 @@ class ChunkerTest < Minitest::Test
     types = chunks.map(&:chunk_type)
     assert_includes types, "function"
     assert_includes types, "class"
-    imports = CCE::Chunker.extract_imports(js, "javascript")
+    imports = CCE::Chunker.extract_imports(js, "app.js")
     assert_equal %w[react auth], imports
   end
 
   def test_import_extraction_never_crashes
-    assert_equal [], CCE::Chunker.extract_imports("!!!not valid$$$", "python")
-    assert_equal [], CCE::Chunker.extract_imports("anything", "plaintext")
+    assert_equal [], CCE::Chunker.extract_imports("!!!not valid$$$", "broken.py")
+    assert_equal [], CCE::Chunker.extract_imports("anything", "notes.md")
   end
 
   def test_chunk_id_is_deterministic_and_matches_spec

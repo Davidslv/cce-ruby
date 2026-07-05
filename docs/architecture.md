@@ -40,8 +40,11 @@ loaded through `lib/cce.rb`. Two data flows dominate: **index** (write path) and
 | `Hashing` | FNV-1a-64 (SPEC §5.1). |
 | `Embedder` / `HashEmbedder` | Cosine (dot product) and the deterministic hashing embedder. |
 | `OllamaEmbedder` | Optional HTTP embedder behind the same interface (SPEC §11). |
-| `Grammars` | Bridges `tree_sitter_language_pack` (grammar dylibs) to `ruby_tree_sitter` (parser). |
-| `Chunker` | Tree-sitter chunking, import extraction, chunk id, token count (SPEC §4.2–4.4). |
+| `Grammars` | Bridges `tree_sitter_language_pack` (grammar dylibs) to `ruby_tree_sitter` (parser); language-agnostic. |
+| `Packs::*` | One `LanguagePack` per language (`packs/<name>.rb`): extensions, function/class node types, import rule, self-test sample (SPEC-V2 §1–2). |
+| `PackRegistry` | Resolves a file to its pack by extension; rejects a duplicate-extension registration (SPEC-V2 §1.1). |
+| `PackValidator` | Structural / grammar-binding / behavioural validation of a pack, with "did you mean" node-kind suggestions (SPEC-V2 §5). |
+| `Chunker` | Registry-driven chunking, import extraction, chunk id, token count, per-chunk `kind` — holds no language knowledge (SPEC §4.2–4.4, SPEC-V2 §1, §3). |
 | `Walker` | Recursive file walk with ignore rules and UTF-8/size filtering (SPEC §7.1). |
 | `VectorStore` | In-memory brute-force cosine search (SPEC §6.2). |
 | `KeywordStore` | In-memory BM25 index (SPEC §6.3). |
@@ -69,8 +72,8 @@ CLI index
   → Indexer.index(root, store_path, embedder)
       → Walker.collect(root)                     # in-scope files (+ skipped count)
       → for each file:
-          Chunker.chunk_file(content, rel)        # function/class chunks or module fallback
-          Chunker.extract_imports(content, lang)  # graph edges (first import segment)
+          Chunker.chunk_file(content, rel)        # pack-driven function/class chunks (+ kind) or module fallback
+          Chunker.extract_imports(content, rel)   # graph edges via the file's pack
           embedder.embed_batch(chunk contents)    # 256-dim vectors
       → Store.create(store_path).write(records, file_imports, embedder)
 ```
@@ -155,10 +158,62 @@ emitted `conformance.json` reproducible run-to-run and across implementations.
 ## Grammar loading
 
 `ruby_tree_sitter` provides the parser but needs a compiled grammar. Rather than
-compile C at runtime, `Grammars` asks `tree_sitter_language_pack` to prefetch
-prebuilt Python/JavaScript dylibs into its cache, then loads them via
-`TreeSitter::Language.load`. This keeps chunking under our exact control (we walk
-the raw parse tree ourselves for precise byte spans) while avoiding a build step.
+compile C at runtime, `Grammars` asks `tree_sitter_language_pack` to prefetch the
+prebuilt dylib for a grammar *name* into its cache, then loads it via
+`TreeSitter::Language.load`. `Grammars` knows how to find and load a grammar but
+nothing about what any language means — each pack declares its own `grammar_name`.
+This keeps chunking under our exact control (we walk the raw parse tree ourselves
+for precise byte spans) while avoiding a build step.
+
+## Language packs (v2.0)
+
+The engine holds **zero** language-specific knowledge. Everything a language
+needs is declared by a **`LanguagePack`** (`lib/cce/packs/<name>.rb`):
+
+| Member | Meaning |
+|---|---|
+| `name` / `extensions` | unique id and the file extensions it claims (leading dot, lowercase) |
+| `grammar_name` → `grammar` | the tree-sitter grammar to parse with |
+| `function_types` / `class_types` | AST node types that become `function` / `class` chunks |
+| `import_node_types` / `extract_imports` | the node types it inspects, and the ordered, de-duplicated import names it yields |
+| `sample` / `expected` | a self-test snippet and what it must produce (counts, kinds, exact imports) |
+
+The **`PackRegistry`** owns the set of packs and resolves a path to its pack by
+extension (`pack_for`), rejecting any registration whose extension is already
+claimed. The `Chunker` is generic: `pack = registry.pack_for(path)`; if `nil`,
+emit the language-neutral `module` fallback; otherwise parse with `pack.grammar`,
+walk the tree, and emit a chunk for every **named** node whose type is in
+`function_types`/`class_types` — nested ones too (a method inside a class yields
+both chunks; a Rust `impl` and its `fn`s both emit). Import extraction is likewise
+delegated to the pack. **A test asserts the core chunker/importer name no language
+and no extension literal**, so this indirection cannot silently rot.
+
+### Chunk taxonomy: `chunk_type` + `kind`
+
+Every chunk carries two labels. `chunk_type` is the coarse bucket used by the
+rest of the engine — `function`, `class`, or `module` (fallback) — deliberately
+unchanged, because retrieval ranks on content and path, not on the label. `kind`
+is the **exact tree-sitter node type** that produced the chunk
+(`struct_specifier`, `trait_item`, `interface_declaration`, `method`, …; `module`
+for the fallback). `kind` is deterministic straight from the node type, so both
+implementations agree trivially; it is carried through persistence, surfaced in
+`search`/`stats`/dashboard, and appears in `conformance.json`. It does **not**
+affect scoring, RRF, penalties, or `chunk_id`.
+
+### Validators (the safety rail)
+
+A pack is compatible iff it passes three layers (`PackValidator`, surfaced via
+`cce packs --validate`, a CI test-gate, and cheap fail-fast startup checks):
+
+1. **Structural** — name present and unique; ≥1 lowercase leading-dot extension;
+   no extension claimed twice; the full interface is implemented.
+2. **Grammar-binding** — the grammar loads and every string in `function_types`,
+   `class_types`, and `import_node_types` is a real node kind in that grammar. On
+   a miss it suggests the nearest valid kinds by edit distance ("did you mean").
+3. **Behavioural** — run the pack over its own `sample` and assert the minimum
+   function/class counts, the required `kind`s, **and `extract_imports == expected`
+   exactly**. This catches a pack that is structurally valid but wired to the
+   wrong node type, and pins import extraction.
 
 ## Where this design would strain
 
@@ -180,10 +235,21 @@ Being honest about the edges of the design:
   Ollama embedder addresses this but leaves conformance behind; the two goals
   (semantic quality vs. cross-impl determinism) genuinely pull apart here.
 - **Language coverage.** Chunking depends on the grammars shipped by
-  `tree_sitter_language_pack` (Python and JavaScript in practice). Files in other
-  languages fall back to a whole-file "module" chunk — indexed and searchable,
-  but not chunked at function/class granularity. Adding a language means adding
-  a grammar and node-type rules.
+  `tree_sitter_language_pack`. Six languages ship as packs (Ruby, Rust,
+  TypeScript, C, Python, JavaScript); files in any other language fall back to a
+  whole-file `module` chunk — indexed and searchable, but not chunked at
+  function/class granularity. Adding a language is *one pack file + register it +
+  `cce packs --validate`* — no core edits (see
+  [`adding-a-language.md`](adding-a-language.md)).
+- **One extension → one pack.** The registry maps each extension to exactly one
+  pack, so a file's language is decided purely by its extension. This is simple
+  and fast but strains where a single extension carries multiple dialects that
+  need *content* to disambiguate — `.h` is claimed by the C pack yet is also used
+  by C++/Objective-C headers, and `.ts` vs `.tsx` (and JSX-in-`.js`) are real
+  grammar dialects the packs approximate with one grammar each. Per-file dialect
+  detection would mean resolving a pack from content, not just the extension —
+  more power, but it gives up the "extension is destiny" simplicity and the
+  trivially-deterministic resolution the conformance gate leans on.
 - **Parser robustness on hostile input.** Indexed files are untrusted data fed
   to a native parser (see [`../SECURITY.md`](../SECURITY.md)). A pathological or
   malicious input could stress `ruby_tree_sitter`/the grammar. CCE never

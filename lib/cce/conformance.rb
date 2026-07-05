@@ -1,10 +1,10 @@
 # WHY: Two implementations of this spec must produce identical results on a
 #      fixed fixture. The conformance harness is the executable proof of that
-#      equivalence and a hard acceptance gate (SPEC §8).
-# WHAT: Indexes the fixture, runs the three canonical queries (graph disabled),
-#       and emits the exact conformance.json structure — deterministically.
+#      equivalence and a hard acceptance gate (SPEC §8, SPEC-V2 §7).
+# WHAT: Indexes the fixture (graph disabled) and emits the exact conformance.json
+#       structure — deterministically. In v2 each chunk carries its node `kind`.
 # RESPONSIBILITIES:
-#   - Produce the sorted chunk manifest and per-query top-5 results.
+#   - Produce the sorted chunk manifest (now including `kind`) and query results.
 #   - Format scores as fixed 6-decimal strings; sort chunks canonically.
 #   - Emit stable, reproducible JSON.
 #   - Deliberately NOT include graph expansion (runs with it disabled).
@@ -33,8 +33,7 @@ module CCE
       file_imports = {}
       files.each do |rel, content|
         chunks = Chunker.chunk_file(content, rel)
-        lang = Chunker.language_for(rel)
-        file_imports[rel] = lang ? Chunker.extract_imports(content, lang) : []
+        file_imports[rel] = Chunker.extract_imports(content, rel)
         all_chunks.concat(chunks)
       end
 
@@ -53,11 +52,9 @@ module CCE
       JSON.pretty_generate(stringify(run(fixture_dir, impl_language: impl_language)))
     end
 
-    # Load the fixture files in a fixed order (README always present per spec).
+    # Load every file in the fixture directory in a fixed (sorted) order.
     def load_files(dir)
-      names = %w[auth.py payments.py README.md].select { |n| File.exist?(File.join(dir, n)) }
-      # Fall back to any files present if the canonical names are absent.
-      names = Dir.children(dir).select { |n| File.file?(File.join(dir, n)) }.sort if names.empty?
+      names = Dir.children(dir).select { |n| File.file?(File.join(dir, n)) }.sort
       names.map { |n| [n, File.read(File.join(dir, n))] }
     end
 
@@ -69,6 +66,7 @@ module CCE
           start_line: c.start_line,
           end_line: c.end_line,
           chunk_type: c.chunk_type,
+          kind: c.kind,
           chunk_id: c.chunk_id,
           token_count: c.token_count
         }

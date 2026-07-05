@@ -60,8 +60,9 @@ This walks the directory, AST-chunks each file into functions/classes, embeds
 each chunk, and writes an index to `lib/.cce/index.db`.
 
 > **First run note.** The very first time you index or search, CCE downloads the
-> Python and JavaScript tree-sitter grammar libraries into a local cache
-> (one-time, needs network). After that it runs fully offline.
+> tree-sitter grammar libraries for its six supported languages (Ruby, Rust,
+> TypeScript, C, Python, JavaScript) into a local cache (one-time, needs network).
+> After that it runs fully offline.
 
 ## 5. Search it
 
@@ -85,17 +86,27 @@ bundle exec bin/cce search "bm25 keyword score" --dir lib --top-k 5 --json
 bundle exec bin/cce stats --dir lib
 ```
 
-This prints chunk and file counts, a per-language breakdown, average tokens per
-chunk, and the store size.
+This prints chunk and file counts, a per-language breakdown, a per-`kind`
+breakdown (the exact tree-sitter node types), average tokens per chunk, and the
+store size.
+
+## 7. See the language packs
+
+```sh
+bundle exec bin/cce packs              # the six registered packs and their extensions
+bundle exec bin/cce packs --validate   # run the validators over every pack
+```
 
 ## Where to go next
 
-- **[`how-to.md`](how-to.md)** — task recipes: benchmark a real repo, run
-  conformance, switch to the Ollama embedder.
+- **[`how-to.md`](how-to.md)** — task recipes: benchmark a real repo, validate
+  packs, run conformance, switch to the Ollama embedder.
+- **[`adding-a-language.md`](adding-a-language.md)** — add support for a new
+  language as a self-contained pack.
 - **[`architecture.md`](architecture.md)** — how the pipeline fits together and
   why it is built this way.
-- **[`../SPEC.md`](../SPEC.md)** — the authoritative specification: the source of
-  truth for every behaviour above.
+- **[`../SPEC.md`](../SPEC.md)** and **[`../SPEC-V2.md`](../SPEC-V2.md)** — the
+  authoritative specifications: the source of truth for every behaviour above.
 
 ## Troubleshooting
 

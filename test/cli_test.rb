@@ -58,6 +58,73 @@ class CLITest < Minitest::Test
     assert_match(/--dir or --store/, err)
   end
 
+  def test_packs_lists_the_six_packs
+    code, out, = capture(["packs"])
+    assert_equal 0, code
+    assert_match(/Registered language packs \(6\):/, out)
+    %w[python javascript ruby rust typescript c].each { |n| assert_match(/\b#{n}\b/, out) }
+    assert_match(/grammar=rust/, out)
+  end
+
+  def test_packs_validate_passes_for_all_shipped_packs
+    code, out, err = capture(["packs", "--validate"])
+    assert_equal 0, code
+    assert_match(/Validating 6 packs/, out)
+    assert_match(/All 6 packs valid\./, out)
+    assert_equal "", err
+    refute_match(/FAIL/, out)
+  end
+
+  def test_search_json_and_stats_carry_kind
+    with_tmpdir do |dir|
+      write_fixture(dir)
+      capture(["index", dir])
+
+      code, out, = capture(["search", "hash password", "--dir", dir, "--json", "--no-graph"])
+      assert_equal 0, code
+      results = JSON.parse(out)["results"]
+      assert results.first.key?("kind")
+      refute_empty results.first["kind"].to_s
+
+      code, out, = capture(["stats", "--dir", dir])
+      assert_equal 0, code
+      assert_match(/Kinds:\s+.*function_definition/, out)
+    end
+  end
+
+  # A deliberately broken pack: its struct node kind is misspelled.
+  class BrokenC < CCE::Packs::C
+    def name = "broken-c"
+    def extensions = [".brokenc"]
+    def class_types = %w[struct_specifer]
+  end
+
+  def test_packs_validate_prints_helpful_diagnostic_and_exits_nonzero
+    reg = CCE::PackRegistry.new
+    reg.register(BrokenC.new)
+    CCE.registry = reg
+    begin
+      code, out, err = capture(["packs", "--validate"])
+      assert_equal 1, code
+      assert_match(/FAIL\s+broken-c/, out)
+      assert_match(/struct_specifer/, out)
+      assert_match(/Did you mean.*struct_specifier/, out)
+      assert_match(/failed validation/, err)
+    ensure
+      CCE.reset_registry!
+    end
+  end
+
+  def test_search_human_output_shows_kind
+    with_tmpdir do |dir|
+      write_fixture(dir)
+      capture(["index", dir])
+      code, out, = capture(["search", "hash password", "--dir", dir, "--no-graph"])
+      assert_equal 0, code
+      assert_match(%r{\(function/function_definition\)}, out)
+    end
+  end
+
   def test_index_missing_dir
     code, _out, err = capture(["index", "/nonexistent/path/xyz"])
     assert_equal 2, code

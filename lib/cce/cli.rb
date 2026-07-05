@@ -15,6 +15,8 @@ require_relative "indexer"
 require_relative "store"
 require_relative "conformance"
 require_relative "bench"
+require_relative "packs"
+require_relative "pack_validator"
 require_relative "numeric_format"
 require_relative "metrics"
 require_relative "metrics_event_log"
@@ -40,6 +42,7 @@ module CCE
       when "search"      then cmd_search(argv)
       when "stats"       then cmd_stats(argv)
       when "bench"       then cmd_bench(argv)
+      when "packs"       then cmd_packs(argv)
       when "conformance" then cmd_conformance(argv)
       when "feedback"    then cmd_feedback(argv)
       when "dashboard"   then cmd_dashboard(argv)
@@ -198,6 +201,7 @@ module CCE
         start_line: r[:start_line],
         end_line: r[:end_line],
         chunk_type: r[:chunk_type],
+        kind: r[:kind],
         score: NumericFormat.fmt6(r[:score])
       }
     end
@@ -211,7 +215,7 @@ module CCE
         snippet = r[:content].to_s.strip.lines.first.to_s.strip[0, 80]
         @out.puts "#{r[:rank]}. [#{NumericFormat.fmt6(r[:score])}] " \
                   "#{r[:file_path]}:#{r[:start_line]}-#{r[:end_line]} " \
-                  "(#{r[:chunk_type]})"
+                  "(#{r[:chunk_type]}/#{r[:kind]})"
         @out.puts "    #{snippet}"
       end
     end
@@ -234,10 +238,12 @@ module CCE
         chunks = s.chunks
         files = chunks.map(&:file_path).uniq
         by_lang = chunks.map(&:language).tally
+        by_kind = chunks.map(&:kind).tally
         avg_tokens = chunks.empty? ? 0 : chunks.sum(&:token_count).to_f / chunks.length
         @out.puts "Chunks:     #{chunks.length}"
         @out.puts "Files:      #{files.length}"
         @out.puts "Languages:  #{by_lang.sort.map { |l, c| "#{l}=#{c}" }.join(', ')}"
+        @out.puts "Kinds:      #{by_kind.sort.map { |k, c| "#{k}=#{c}" }.join(', ')}"
         @out.puts "Avg tokens: #{format('%.1f', avg_tokens)}"
         @out.puts "Store size: #{s.size_bytes} bytes"
       ensure
@@ -251,17 +257,65 @@ module CCE
     def cmd_bench(argv)
       store = nil
       queries = nil
+      lang = nil
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--queries PATH") { |v| queries = v }
+        o.on("--lang NAME") { |v| lang = v }
       end
       rest = parser.parse(argv)
       repo = rest.shift
       return usage_error("bench requires a <repo-dir>") unless repo
       return usage_error("no such directory: #{repo}") unless File.directory?(repo)
 
-      report_path = Bench.run(repo, store_path: store, queries_file: queries, out: @out)
+      report_path = Bench.run(repo, store_path: store, queries_file: queries, lang: lang, out: @out)
       @out.puts "Wrote #{report_path}"
+      0
+    end
+
+    # ---- packs ---------------------------------------------------------------
+
+    # List registered language packs, or validate them across all three layers
+    # (SPEC-V2 §5). `--validate` exits non-zero if any pack fails.
+    def cmd_packs(argv)
+      validate = false
+      parser = OptionParser.new do |o|
+        o.on("--validate") { validate = true }
+      end
+      parser.parse(argv)
+
+      packs = CCE.registry.all
+      return cmd_packs_validate(packs) if validate
+
+      @out.puts "Registered language packs (#{packs.length}):"
+      packs.each do |p|
+        @out.puts format(
+          "  %-11s %-24s grammar=%-11s fn-types=%d cls-types=%d",
+          p.name, p.extensions.join(","), p.grammar_name,
+          p.function_types.length, p.class_types.length
+        )
+      end
+      0
+    end
+
+    def cmd_packs_validate(packs)
+      failed = false
+      @out.puts "Validating #{packs.length} packs..."
+      packs.each do |p|
+        diags = PackValidator.validate(p, others: packs - [p])
+        if diags.empty?
+          @out.puts "  ok    #{p.name}"
+        else
+          failed = true
+          @out.puts "  FAIL  #{p.name}"
+          diags.each { |d| @out.puts "        #{d}" }
+        end
+      end
+      if failed
+        @err.puts "one or more packs failed validation"
+        return 1
+      end
+      @out.puts "All #{packs.length} packs valid."
       0
     end
 
@@ -366,7 +420,8 @@ module CCE
           cce index <dir> [--store PATH] [--embedder hash|ollama] [--no-metrics]
           cce search <query> [--dir DIR | --store PATH] [--top-k N] [--no-graph] [--json] [--no-metrics]
           cce stats [--dir DIR | --store PATH]
-          cce bench <repo-dir> [--queries FILE] [--store PATH]
+          cce bench <repo-dir> [--lang ruby|rust|typescript|c] [--queries FILE] [--store PATH]
+          cce packs [--validate]
           cce conformance <fixture-dir> [-o conformance.json]
           cce feedback <query-id> --helpful|--not-helpful [--note "..."] [--dir DIR | --store PATH]
           cce dashboard [--dir DIR | --store PATH] [--port N] [--metrics PATH] [--no-open]

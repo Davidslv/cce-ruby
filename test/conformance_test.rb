@@ -62,7 +62,7 @@ class ConformanceTest < Minitest::Test
     with_fixture do |dir|
       data = CCE::Conformance.run(dir)
       assert_equal "ruby", data[:impl_language]
-      assert_equal "1.0", data[:spec_version]
+      assert_equal "2.0", data[:spec_version]
     end
   end
 

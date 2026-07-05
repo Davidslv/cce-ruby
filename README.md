@@ -11,10 +11,25 @@ stores a vector + keyword index on disk, and answers queries with hybrid vector
 > implementation in Rust — built from the *identical* spec — lives at
 > [davidslv/cce-rust](https://github.com/davidslv/cce-rust). Both are **SPEC
 > v1.0** at the core, extended by the **v1.1 dashboard/observability addendum**
-> ([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)) — the core engine and its
-> `conformance.json` are unchanged. The experiment (and what it says about specs
-> as programs) is written up here:
+> ([`DASHBOARD-SPEC.md`](DASHBOARD-SPEC.md)) and the **v2.0 pluggable
+> language-pack evolution** ([`SPEC-V2.md`](SPEC-V2.md)). The experiment (and what
+> it says about specs as programs) is written up here:
 > [The spec was the program](https://davidslv.uk/2026/07/05/the-spec-was-the-program.html).
+
+> **v2.0 (breaking).** Language support is now a **pluggable pack architecture**:
+> the core engine holds zero language-specific knowledge and resolves each file to
+> a `LanguagePack` through a registry. Six languages ship — **Ruby, Rust,
+> TypeScript, C, Python, JavaScript** — each a self-contained pack validated by a
+> three-layer safety rail (`cce packs --validate`). Every chunk now carries a
+> `kind` (its exact tree-sitter node type), and the `conformance.json` chunk shape
+> gained that field. See [`docs/adding-a-language.md`](docs/adding-a-language.md).
+
+## Walkthrough
+
+![CCE walkthrough — language packs, index, validate, search, stats](docs/walkthrough.gif)
+
+▶ **Interactive version:** open [`docs/presentation/index.html`](docs/presentation/index.html)
+in a browser — a self-contained, autoplaying terminal cast (no dependencies, no network).
 
 ## Pipeline
 
@@ -33,10 +48,30 @@ search a query
 ## Requirements
 
 - **Ruby 3.2+** (developed on 3.4.7).
-- A C toolchain is **not** required at runtime: tree-sitter grammars for Python
-  and JavaScript are provided as prebuilt dylibs by the
-  `tree_sitter_language_pack` gem and loaded through the `ruby_tree_sitter`
-  bindings.
+- A C toolchain is **not** required at runtime: the tree-sitter grammars for all
+  six supported languages (Ruby, Rust, TypeScript, C, Python, JavaScript) are
+  provided as prebuilt dylibs by the `tree_sitter_language_pack` gem and loaded
+  through the `ruby_tree_sitter` bindings.
+
+## Supported languages
+
+Each language is one **pack** (`lib/cce/packs/<name>.rb`): a small, self-contained
+unit that declares its extensions, its function/class node types, its import rule,
+and a self-test sample. Adding a language is *add one pack file + register it + it
+passes `cce packs --validate`* — no core edits.
+
+| Pack | Extensions | Chunks (function / class) | Imports from |
+|---|---|---|---|
+| `ruby` | `.rb` | methods, singleton methods / classes, modules | `require`, `require_relative` |
+| `rust` | `.rs` | `fn` items / struct·enum·trait·impl·union items | `use` (first path segment) |
+| `typescript` | `.ts`, `.tsx` | functions, methods, arrow/function exprs / class·interface·enum decls | `import … from "x"` |
+| `c` | `.c`, `.h` | function definitions / struct·union·enum specifiers | `#include <…>` / `"…"` |
+| `python` | `.py` | function defs / class defs | `import`, `from … import` |
+| `javascript` | `.js`, `.jsx`, `.mjs`, `.cjs` | functions, methods, arrow/function exprs / class decls | `import … from "x"` |
+
+Files with no matching pack fall back to a single whole-file `module` chunk.
+Run `cce packs` to list what is registered, or `cce packs --validate` to run the
+structural, grammar-binding, and behavioural validators over every pack.
 
 ## Quickstart
 
@@ -54,10 +89,9 @@ bundle exec bin/cce index path/to/repo
 bundle exec bin/cce search "hash the password" --dir path/to/repo --top-k 10
 ```
 
-> The first `index`/`search`/`conformance` run downloads the Python and
-> JavaScript grammar libraries into a local cache (one-time, requires network).
-> The default test suite assumes that cache is already warm and performs no
-> network I/O.
+> The first `index`/`search`/`conformance` run downloads the six grammar
+> libraries into a local cache (one-time, requires network). The default test
+> suite assumes that cache is already warm and performs no network I/O.
 
 ## Usage
 
@@ -73,10 +107,14 @@ bundle exec bin/cce search "process payment" --dir path/to/repo --json --no-grap
 bundle exec bin/cce stats --dir path/to/repo
 
 # Benchmark against a pinned repo, writing docs/BENCHMARKS.md
-bundle exec bin/cce bench path/to/flask
+bundle exec bin/cce bench path/to/sinatra
 
-# Cross-implementation conformance output
-bundle exec bin/cce conformance test/fixture -o conformance.json
+# List / validate the language packs
+bundle exec bin/cce packs
+bundle exec bin/cce packs --validate
+
+# Cross-implementation conformance output (over the seven sample fixtures)
+bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 ```
 
 ### Commands
@@ -85,9 +123,10 @@ bundle exec bin/cce conformance test/fixture -o conformance.json
 |---|---|
 | `index <dir> [--store PATH] [--embedder hash\|ollama]` | Walk, chunk, embed, persist. |
 | `search <query> [--dir DIR \| --store PATH] [--top-k N] [--no-graph] [--json]` | Load store, run retrieval. |
-| `stats [--dir DIR \| --store PATH]` | Chunk/file counts, per-language breakdown, avg tokens, store size. |
+| `stats [--dir DIR \| --store PATH]` | Chunk/file counts, per-language and per-`kind` breakdown, avg tokens, store size. |
 | `bench <repo-dir> [--queries FILE] [--store PATH]` | Run the benchmark, write `docs/BENCHMARKS.md`. |
-| `conformance <fixture-dir> [-o FILE]` | Emit the deterministic `conformance.json`. |
+| `packs [--validate]` | List registered language packs, or run the three-layer validators over every pack. |
+| `conformance <fixture-dir> [-o FILE]` | Emit the deterministic `conformance.json` (chunks include `kind`). |
 | `feedback <query-id> --helpful\|--not-helpful [--note "…"] [--dir DIR \| --store PATH]` | Rate a past search result (v1.1). |
 | `dashboard [--dir DIR \| --store PATH] [--port N] [--no-open]` | Serve the read-only, loopback-only metrics dashboard (v1.1). |
 
@@ -114,6 +153,8 @@ Every `search`, `index`, and `feedback` appends one JSON line to a persisted eve
 log at `<store-dir>/metrics.jsonl` (best-effort — a metrics failure never breaks
 the command). A pure aggregator turns that log into KPIs, daily series, and
 windowed deltas, served by a **local, read-only, fully self-contained** web page.
+
+![CCE dashboard — token & cost savings and retrieval quality, trended](docs/dashboard.png)
 
 ```sh
 # 1. Index and search as usual — each search records an event and prints a query-id.
@@ -142,7 +183,7 @@ aggregation formulas.
 bundle exec rake test
 ```
 
-The suite is deterministic and hermetic (no external network): **118 tests, ~93%
+The suite is deterministic and hermetic (no external network): **163 tests, ~93%
 line coverage** (SimpleCov; 1 skip is the live Ollama integration test, excluded
 from the default suite). The metrics subsystem's clock and id source are injected
 so its tests are deterministic despite the feature being time-based. See
@@ -154,9 +195,11 @@ coverage breakdown.
 | Doc | What it covers |
 |---|---|
 | [`SPEC.md`](SPEC.md) | The authoritative specification (SPEC v1.0). The source of truth for behaviour. |
+| [`SPEC-V2.md`](SPEC-V2.md) | The v2.0 evolution spec: pluggable language packs, `kind`, validators, conformance v2. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Newcomer path: install → first successful index + search. |
-| [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, conformance, switch to Ollama. |
-| [`docs/architecture.md`](docs/architecture.md) | Design goals, component model, rationale, and where the design would strain. |
+| [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, switch to Ollama. |
+| [`docs/adding-a-language.md`](docs/adding-a-language.md) | Step-by-step guide to adding a language pack, with a worked example. |
+| [`docs/architecture.md`](docs/architecture.md) | Design goals, component model, the language-pack model, and where the design would strain. |
 | [`docs/dashboard.md`](docs/dashboard.md) | The v1.1 metrics pipeline, event schema, aggregation formulas, and strain points. |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Every spec ambiguity resolved, with rationale. |
 | [`docs/TDD.md`](docs/TDD.md) | The test-first build log, test count, and coverage. |
@@ -174,8 +217,12 @@ lib/cce/                # implementation, one concern per file
   hashing.rb            # FNV-1a-64
   embedder.rb           # hash embedder + cosine
   ollama_embedder.rb    # optional Ollama backend
-  grammars.rb           # tree-sitter grammar loading
-  chunker.rb            # AST chunking + import extraction + chunk id
+  grammars.rb           # tree-sitter grammar loading (language-agnostic)
+  chunker.rb            # AST chunking + import extraction + chunk id (language-blind)
+  pack_registry.rb      # resolves a file to its LanguagePack (v2.0)
+  pack_validator.rb     # three-layer pack validators (v2.0)
+  packs.rb              # builds the default registry of shipped packs (v2.0)
+  packs/                # one file per language: python, javascript, ruby, rust, typescript, c (v2.0)
   walker.rb             # file walking + ignore rules
   vector_store.rb       # brute-force cosine search
   keyword_store.rb      # BM25 index
@@ -194,7 +241,7 @@ lib/cce/                # implementation, one concern per file
   dashboard_server.rb   # loopback WEBrick server (v1.1)
   cli.rb                # command-line dispatch
 test/                   # tests, written first
-test/fixture/           # the normative conformance fixture corpus
+test/fixture/samples/   # the seven byte-exact sample fixtures (pack self-tests + conformance corpus)
 docs/                   # architecture, DECISIONS, TDD, BENCHMARKS, TIMING, guides
 ```
 

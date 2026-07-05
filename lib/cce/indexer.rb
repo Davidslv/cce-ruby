@@ -39,8 +39,7 @@ module CCE
       file_tokens = {}
       collected[:files].each do |f|
         chunks = Chunker.chunk_file(f[:content], f[:rel])
-        lang = Chunker.language_for(f[:rel])
-        file_imports[f[:rel]] = lang ? Chunker.extract_imports(f[:content], lang) : []
+        file_imports[f[:rel]] = Chunker.extract_imports(f[:content], f[:rel])
         # Whole-file token count for the counterfactual baseline (DASHBOARD-SPEC §3).
         file_tokens[f[:rel]] = Chunker.token_count(f[:content])
         vectors = emb.embed_batch(chunks.map(&:content))
