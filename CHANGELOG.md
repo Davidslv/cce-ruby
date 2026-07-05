@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-07-05
+
+CCE MCP (SPEC-MCP) — a **Model Context Protocol server** so an agent (Claude Code,
+Cursor, …) calls CCE as a **first-class tool it auto-invokes**, plus `cce init` for
+plug-and-play editor wiring. This closes the one gap between clean-room CCE and the
+original: agent integration. Additive minor release — the CLI and the single-repo
+`conformance.json` are byte-for-byte unchanged, and the engine stays offline-first.
+The Ruby and Rust engines expose the **same tool names, input schemas, and output
+shape** (the cross-language contract).
+
+### Added
+
+- **`cce mcp` — an MCP server over stdio (JSON-RPC 2.0).** `CCE::MCP::Server`
+  hand-rolls line-delimited JSON-RPC 2.0 (no new dependency): handshake
+  `initialize` → `{ protocolVersion, capabilities:{tools:{}}, serverInfo:{name:"cce",
+  version} }`; `notifications/initialized`; `tools/list`; `tools/call`; `ping`. The
+  MCP protocol revision is pinned to **`2025-06-18`**. Read-only and offline; a
+  malformed message becomes a JSON-RPC error and a tool raise an `isError` result —
+  the server never crashes.
+- **Three tools with exact, cross-language schemas (`CCE::MCP::Tools`).**
+  `context_search` (`{ query, top_k=8, package?, no_graph?, max_tokens? }`) — the
+  "PREFERRED over Read/Grep" tool; returns ranked chunks (`file:line` + kind) + a
+  `query_id`, and **logs a `search` event** to `.cce/metrics.jsonl` so the dashboard
+  sees agent usage. `index_status` (`{}`) — counts, per-language/kind, store path,
+  freshness. `record_feedback` (`{ query_id, helpful, note? }`) — appends a
+  `feedback` event.
+- **`CCE::MCP::Context`** — resolves the store like the CLI (`--dir`/`--store`/cwd,
+  `--workspace`), stays read-only, and handles a missing index with a friendly
+  "run `cce index`" message instead of erroring.
+- **`cce init [<dir>] [--agent claude] [--remote <sync-url>] [--force]`
+  (`CCE::MCP::Init`).** Ensures an index (via `cce sync pull --latest` when
+  `--remote`/configured, else `cce index` / `cce index --workspace`), then
+  idempotently writes/merges `.mcp.json` (`{ mcpServers:{ cce:{ command:"cce",
+  args:["mcp","--dir","."] } } }`) and a bounded `CLAUDE.md` block steering the agent
+  to prefer `context_search`. Prints next steps.
+- **CCE MCP × CCE Sync (soft dependency).** On startup, when a sync remote is
+  configured and `sync.auto_pull` is on, `cce mcp` does a best-effort
+  `sync pull --latest` to warm the local index (offline-safe — never blocks or
+  errors). `index_status` reports the index source (local vs pulled), its `sha`, and
+  whether it is behind the remote. MCP works fully with **no** Sync configured;
+  `sync.auto_pull` reuses the existing `sync.*` config keys.
+- **Docs & verification.** New [`docs/mcp.md`](docs/mcp.md); a README "Use it with
+  Claude Code (MCP)" section; a cold-start MCP transcript in
+  [`docs/VERIFIED.md`](docs/VERIFIED.md) (every documented command run verbatim).
+
+### Changed
+
+- **Sync artifact FORMAT window pinned to `2.3`.** The content-address `<cce_ver>`
+  and the artifact manifest `cce_version` track the interchange **format**, not the
+  software version. CCE MCP is purely additive and does not change the sync format,
+  so the window stays `2.3` — existing caches remain valid and the cross-language
+  golden checksum is unchanged (`CCE::Sync::SYNC_FORMAT_VERSION`; see DECISIONS
+  D-MCP-2).
+- 40 new tests (server, context, init, CLI); suite **356 runs**, line coverage
+  **94.34%**; `conformance.json` unchanged.
+
 ## [2.3.0] - 2026-07-05
 
 CCE Sync (SPEC-SYNC) — an optional, **offline-first, content-addressed cache** for

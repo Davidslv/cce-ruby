@@ -22,16 +22,25 @@ module CCE
     # caches (SPEC-SYNC §1). Ollama/semantic indexes are local-only.
     SHAREABLE_EMBEDDER = "hash"
 
+    # The sync artifact FORMAT-compatibility window (SPEC-SYNC §3). It is a format
+    # version, NOT the software version: it only rolls when the interchange
+    # artifact/content-address format changes, so caches and the cross-language
+    # golden stay valid across additive releases. v2.4 (CCE MCP) is purely
+    # additive and does not touch the sync format, so the window stays 2.3.
+    SYNC_FORMAT_VERSION = "2.3"
+
     # Where GitRemote keeps its working clones (SPEC-SYNC §4). Overridable so
     # tests are fully hermetic and never touch a developer's ~/.cce.
     def self.default_clone_base(home: Dir.home)
       File.join(home, ".cce", "sync")
     end
 
-    # The cce version at major.minor — the format-compatibility window used in
-    # the content address and the manifest (SPEC-SYNC §3).
+    # The format-compatibility window used in the content address and the manifest
+    # (SPEC-SYNC §3). Pinned to SYNC_FORMAT_VERSION, not CCE::VERSION, so a purely
+    # additive software release does not invalidate existing caches or roll the
+    # cross-language golden.
     def self.cce_version
-      CCE::VERSION.split(".").first(2).join(".")
+      SYNC_FORMAT_VERSION
     end
 
     # Per-member repo_id for workspace sync (SPEC-SYNC §5): a workspace's members

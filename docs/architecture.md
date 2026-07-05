@@ -354,3 +354,46 @@ configured `sync.remote`, nothing runs and every command — and the single-repo
   Non-git backends (S3/HTTP) and a read-only Sourcegraph adapter are possible
   through the same `SyncRemote` interface without CLI changes. See
   [`sync.md`](sync.md) for the full treatment.
+
+## CCE MCP (v2.4)
+
+CCE MCP (SPEC-MCP) turns CCE into a **native agent tool** over the Model Context
+Protocol. It lives entirely under `CCE::MCP` and is purely additive: the CLI and
+single-repo `conformance.json` are untouched, and the engine stays offline-first.
+
+- **The server is a thin, dependency-free JSON-RPC 2.0 loop.** `MCP::Server`
+  reads one JSON message per line from an input IO and writes one response per
+  request to an output IO — the MCP stdio transport. Hand-rolling it (rather than
+  adding an MCP gem) keeps the wire behaviour under our control so it matches the
+  Rust sibling exactly, and makes the tests hermetic (no editor, no network): pipe
+  requests to a `StringIO`, assert the `StringIO` output. The protocol revision is
+  pinned (`MCP::PROTOCOL_VERSION = "2025-06-18"`). Parse errors become JSON-RPC
+  errors and tool raises become `isError` results — the server never dies.
+- **The tools are the cross-language contract.** `MCP::Tools` declares
+  `context_search`, `index_status`, and `record_feedback` with the exact input
+  schemas and output shape both engines share, and formats each call's text
+  `content`. Isolating the catalogue here makes parity with Rust auditable at a
+  glance.
+- **`MCP::Context` holds all the policy.** It resolves the store like the CLI
+  (`--dir`/`--store`/cwd, `--workspace`), loads a `Retriever` (or a
+  `Workspace::FederatedRetriever`) on demand, records the `search`/`feedback`
+  metrics events (so `cce dashboard` sees agent usage), computes `index_status`
+  including sync freshness, and does the best-effort startup warm-up. Keeping the
+  server and tools thin and pure, and the effectful edges (store I/O, sync, the
+  clock) in one place, mirrors how `Sync::Commands` centralises the sync contract.
+- **Sync is a soft dependency, gated twice.** `warm_up!` pulls the latest cached
+  index only when a remote is configured **and** `sync.auto_pull` is on, and any
+  failure (offline, absent remote, guarded overwrite) is swallowed — MCP never
+  degrades below "use the local index". `index_status` reads the local
+  `.cce/sync.json` marker for source/`sha` and contacts the remote (guarded) only
+  to compute "behind-remote".
+- **`cce init` (`MCP::Init`) is the on-ramp.** It ensures an index (sync pull when
+  `--remote`/configured, else local/workspace index), then idempotently merges the
+  `cce` entry into `.mcp.json` and a marker-bounded block into `CLAUDE.md`. The
+  merges preserve any other MCP servers and any user CLAUDE.md content.
+- **Where it strains (documented next steps).** Only Claude Code is wired in v1;
+  Cursor/VS Code/Codex are a fast-follow behind `--agent`. The richer graph tools
+  (`related`, `expand_chunk`) are deliberately deferred to keep the tool set small.
+  Workspace agent-search metrics are recorded at the workspace root
+  (`<root>/.cce/metrics.jsonl`), which `cce dashboard --dir <root>` renders. See
+  [`mcp.md`](mcp.md) for the full treatment.
