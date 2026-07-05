@@ -24,6 +24,13 @@ stores a vector + keyword index on disk, and answers queries with hybrid vector
 > `kind` (its exact tree-sitter node type), and the `conformance.json` chunk shape
 > gained that field. See [`docs/adding-a-language.md`](docs/adding-a-language.md).
 
+## Walkthrough
+
+![CCE walkthrough — language packs, index, validate, search, stats](docs/walkthrough.gif)
+
+▶ **Interactive version:** open [`docs/presentation/index.html`](docs/presentation/index.html)
+in a browser — a self-contained, autoplaying terminal cast (no dependencies, no network).
+
 ## Pipeline
 
 ```
@@ -146,6 +153,8 @@ Every `search`, `index`, and `feedback` appends one JSON line to a persisted eve
 log at `<store-dir>/metrics.jsonl` (best-effort — a metrics failure never breaks
 the command). A pure aggregator turns that log into KPIs, daily series, and
 windowed deltas, served by a **local, read-only, fully self-contained** web page.
+
+![CCE dashboard — token & cost savings and retrieval quality, trended](docs/dashboard.png)
 
 ```sh
 # 1. Index and search as usual — each search records an event and prints a query-id.
