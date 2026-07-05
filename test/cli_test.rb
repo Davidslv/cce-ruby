@@ -43,9 +43,12 @@ class CLITest < Minitest::Test
       code, out, = capture(["search", "process payment", "--dir", dir, "--json", "--no-graph"])
       assert_equal 0, code
       parsed = JSON.parse(out)
-      assert parsed.is_a?(Array)
-      assert_match(/\A\d+\.\d{6}\z/, parsed.first["score"])
-      assert_equal 1, parsed.first["rank"]
+      # v1.1: --json is an object carrying query_id + results (DASHBOARD-SPEC §5).
+      assert parsed.is_a?(Hash)
+      results = parsed["results"]
+      assert results.is_a?(Array)
+      assert_match(/\A\d+\.\d{6}\z/, results.first["score"])
+      assert_equal 1, results.first["rank"]
     end
   end
 
@@ -98,7 +101,7 @@ class CLITest < Minitest::Test
                                "--dir", dir, "--no-graph", "--json")
       assert s2.success?, o2
       parsed = JSON.parse(o2.lines.last)
-      assert_equal "auth.py", parsed.first["file_path"]
+      assert_equal "auth.py", parsed["results"].first["file_path"]
     end
   end
 end

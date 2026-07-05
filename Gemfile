@@ -6,6 +6,7 @@ ruby ">= 3.2"
 gem "sqlite3", "~> 2.9"                    # on-disk persistence store
 gem "ruby_tree_sitter", "~> 2.1"           # tree-sitter FFI bindings for AST chunking
 gem "tree_sitter_language_pack", "~> 1.12" # bundled Python/JavaScript grammars
+gem "webrick", "~> 1.9"                     # minimal loopback HTTP server for `cce dashboard`
 
 group :development, :test do
   gem "minitest", "~> 5.25"     # standard test framework (TDD)

@@ -36,10 +36,13 @@ module CCE
 
       records = []
       file_imports = {}
+      file_tokens = {}
       collected[:files].each do |f|
         chunks = Chunker.chunk_file(f[:content], f[:rel])
         lang = Chunker.language_for(f[:rel])
         file_imports[f[:rel]] = lang ? Chunker.extract_imports(f[:content], lang) : []
+        # Whole-file token count for the counterfactual baseline (DASHBOARD-SPEC §3).
+        file_tokens[f[:rel]] = Chunker.token_count(f[:content])
         vectors = emb.embed_batch(chunks.map(&:content))
         chunks.each_with_index do |c, i|
           records << { chunk: c, vector: vectors[i] }
@@ -47,7 +50,8 @@ module CCE
       end
 
       Store.create(store_path) do |s|
-        s.write(records: records, file_imports: file_imports, embedder: emb.name)
+        s.write(records: records, file_imports: file_imports,
+                file_tokens: file_tokens, embedder: emb.name)
       end
 
       {
@@ -67,6 +71,16 @@ module CCE
         vectors = store.vectors
         emb = embedder || build_embedder(store.embedder_name)
         Retriever.new(chunks, embedder: emb, vectors: vectors, file_imports: store.file_imports)
+      ensure
+        store.close
+      end
+    end
+
+    # Load the persisted whole-file token counts (DASHBOARD-SPEC §3) for a store.
+    def file_token_counts(store_path)
+      store = Store.open(store_path)
+      begin
+        store.file_token_counts
       ensure
         store.close
       end

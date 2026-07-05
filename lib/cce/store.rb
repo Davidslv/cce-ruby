@@ -1,10 +1,10 @@
 # WHY: Indexing and searching happen in separate processes, so the corpus must
 #      live on disk in a form that fully reconstructs retrieval state (SPEC §7).
 # WHAT: A SQLite-backed store persisting chunks, embedding vectors, import edges,
-#       and metadata (embedder backend).
+#       per-file whole-file token counts (DASHBOARD-SPEC §3), and metadata.
 # RESPONSIBILITIES:
 #   - Create/open an on-disk store and (re)write a full corpus idempotently.
-#   - Load chunks (as Chunk structs), vectors, and per-file imports.
+#   - Load chunks (as Chunk structs), vectors, per-file imports, and file tokens.
 #   - Report on-disk size for stats.
 #   - Deliberately NOT own chunking, embedding, or ranking.
 
@@ -32,6 +32,10 @@ module CCE
         file_path TEXT NOT NULL,
         module    TEXT NOT NULL,
         ord       INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS file_tokens (
+        file_path   TEXT PRIMARY KEY,
+        token_count INTEGER NOT NULL
       );
     SQL
 
@@ -71,10 +75,11 @@ module CCE
 
     # Idempotent full write: replace the entire corpus. Chunk IDs are
     # deterministic, so re-indexing the same directory yields the same store.
-    def write(records:, file_imports:, embedder:)
+    def write(records:, file_imports:, embedder:, file_tokens: {})
       @db.transaction do
         @db.execute("DELETE FROM chunks")
         @db.execute("DELETE FROM file_imports")
+        @db.execute("DELETE FROM file_tokens")
         @db.execute("DELETE FROM meta")
         @db.execute("INSERT INTO meta (key, value) VALUES ('embedder', ?)", [embedder])
         @db.execute("INSERT INTO meta (key, value) VALUES ('spec_version', ?)", [Config::SPEC_VERSION])
@@ -97,6 +102,10 @@ module CCE
           mods.each_with_index { |m, i| imp.execute(fp, m, i) }
         end
         imp.close
+
+        tok = @db.prepare("INSERT OR REPLACE INTO file_tokens (file_path, token_count) VALUES (?, ?)")
+        file_tokens.each { |fp, count| tok.execute(fp, count) }
+        tok.close
       end
       self
     end
@@ -128,6 +137,15 @@ module CCE
       map = Hash.new { |h, k| h[k] = [] }
       @db.execute("SELECT file_path, module, ord FROM file_imports ORDER BY file_path, ord") do |row|
         map[row[0]] << row[1]
+      end
+      map
+    end
+
+    # @return [Hash{String=>Integer}] file_path => whole-file token count (SPEC §3)
+    def file_token_counts
+      map = {}
+      @db.execute("SELECT file_path, token_count FROM file_tokens") do |row|
+        map[row[0]] = row[1]
       end
       map
     end

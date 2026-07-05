@@ -52,6 +52,21 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_file_token_counts_round_trip
+    with_tmpdir do |dir|
+      store_path = File.join(dir, "idx.db")
+      emb = CCE::HashEmbedder.new
+      recs = sample_chunks.map { |c| { chunk: c, vector: emb.embed(c.content) } }
+      CCE::Store.create(store_path) do |s|
+        s.write(records: recs, file_imports: { "a.py" => [] },
+                file_tokens: { "a.py" => 123 }, embedder: "hash")
+      end
+      s2 = CCE::Store.open(store_path)
+      assert_equal({ "a.py" => 123 }, s2.file_token_counts)
+      s2.close
+    end
+  end
+
   def test_file_imports_round_trip
     with_tmpdir do |dir|
       store_path = File.join(dir, "idx.db")

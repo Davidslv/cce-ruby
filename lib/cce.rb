@@ -6,7 +6,7 @@
 #   - Own no logic itself.
 
 module CCE
-  VERSION = "1.0.0"
+  VERSION = "1.1.0"
 end
 
 require_relative "cce/config"
@@ -26,4 +26,11 @@ require_relative "cce/ollama_embedder"
 require_relative "cce/indexer"
 require_relative "cce/conformance"
 require_relative "cce/bench"
+require_relative "cce/metrics"
+require_relative "cce/metrics_event_log"
+require_relative "cce/metrics_recorder"
+require_relative "cce/metrics_aggregator"
+require_relative "cce/dashboard_page"
+require_relative "cce/dashboard_app"
+require_relative "cce/dashboard_server"
 require_relative "cce/cli"
