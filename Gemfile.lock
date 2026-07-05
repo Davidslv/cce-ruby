@@ -2,8 +2,12 @@ GEM
   remote: https://rubygems.org/
   specs:
     docile (1.4.1)
-    minitest (5.27.0)
+    drb (2.2.3)
+    minitest (6.0.6)
+      drb (~> 2.0)
+      prism (~> 1.5)
     oppen (1.0.0)
+    prism (1.9.0)
     rake (13.4.2)
     ruby_tree_sitter (2.1.1-aarch64-linux-gnu)
       oppen (~> 1.0)
@@ -64,7 +68,7 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  minitest (~> 5.25)
+  minitest (~> 6.0)
   rake (~> 13.2)
   ruby_tree_sitter (~> 2.1)
   simplecov (~> 0.22)
@@ -75,8 +79,10 @@ DEPENDENCIES
 CHECKSUMS
   bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
   docile (1.4.1) sha256=96159be799bfa73cdb721b840e9802126e4e03dfc26863db73647204c727f21e
-  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
+  minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
   oppen (1.0.0) sha256=379bf0b35c5e87c5f4139927721fd6c9f561e344a73ce3f658726a609034ddee
+  prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
   ruby_tree_sitter (2.1.1-aarch64-linux-gnu) sha256=a5d93b676b69b7c0f0421b8a947c41b8c44d7d626b66537d458d066ff8ab8970
   ruby_tree_sitter (2.1.1-aarch64-linux-musl) sha256=a7c7cae91d58ff98ff5ec43ab10798547080dce2fdc0c65b591aea35758278e5

@@ -9,7 +9,7 @@ gem "tree_sitter_language_pack", "~> 1.12" # bundled Python/JavaScript grammars
 gem "webrick", "~> 1.9"                     # minimal loopback HTTP server for `cce dashboard`
 
 group :development, :test do
-  gem "minitest", "~> 5.25"     # standard test framework (TDD)
+  gem "minitest", "~> 6.0"      # standard test framework (TDD)
   gem "rake", "~> 13.2"         # test task runner
   gem "simplecov", "~> 0.22"    # coverage measurement
 end
