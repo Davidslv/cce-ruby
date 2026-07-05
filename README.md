@@ -134,6 +134,12 @@ bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 | `conformance <fixture-dir> [-o FILE]` | Emit the deterministic `conformance.json` (chunks include `kind`). |
 | `feedback <query-id> --helpful\|--not-helpful [--note "…"] [--dir DIR \| --store PATH]` | Rate a past search result (v1.1). |
 | `dashboard [--dir DIR \| --store PATH] [--port N] [--no-open]` | Serve the read-only, loopback-only metrics dashboard (v1.1). |
+| `workspace init [<dir>] [--force]` | Detect members → write `.cce/workspace.yml` (v2.2). |
+| `workspace list [<dir>]` | Print members + cross-member edges (v2.2). |
+| `index --workspace [<dir>]` | Index each member into its own store + build the graph (v2.2). |
+| `search <query> --workspace [<dir>] [--package a,b] […]` | Federated search over the members' union (v2.2). |
+| `stats --workspace [<dir>]` | Per-member metrics + totals + edges (v2.2). |
+| `dashboard --workspace [<dir>]` | Federated roll-up dashboard with a per-package breakdown (v2.2). |
 
 ## Secret & sensitive-file protection
 
@@ -160,6 +166,60 @@ Indexing is **secret-safe by default** (two layers, both on unless you pass
 `--allow-secrets` disables **both** layers for that run and prints a warning; use
 it only when you deliberately need to index credential material. Even so, the
 store is always local-only (`.cce/…` on disk) — see `SECURITY.md`.
+
+## Workspaces / ecosystems
+
+A **workspace** lets CCE treat several related codebases under one root — say a
+Rails `app`, a `billing` engine, and a `web` frontend — as one searchable whole,
+while **each member keeps its own isolated store**. Nothing is stored centrally
+except two small metadata files at the root (`.cce/workspace.yml` and
+`.cce/workspace-graph.json`).
+
+```text
+myproduct/
+  app/               Gemfile (gem "billing"), config/application.rb, app/models/…
+  engines/
+    billing/         billing.gemspec (name = "billing"), lib/billing.rb
+  web/               package.json (name = "web"), tsconfig.json, src/index.ts
+```
+
+```sh
+# 1. Detect members and write a reviewable manifest at <root>/.cce/workspace.yml
+bundle exec bin/cce workspace init myproduct
+#   app     [rails-app]      app             (package: app)
+#   billing [ruby-engine]    engines/billing (package: billing)
+#   web     [typescript]     web             (package: web)
+
+# 2. See the members and the cross-member dependency edges
+bundle exec bin/cce workspace list myproduct
+#   app -> billing (gemfile)     ← app's Gemfile declares gem "billing"
+
+# 3. Index every member into its OWN <member>/.cce/ + build the graph
+bundle exec bin/cce index --workspace myproduct
+
+# 4. Federated search across the whole ecosystem (results tagged by member)
+bundle exec bin/cce search "charge amount" --workspace myproduct
+#   0.83…  app · app/models/charge.rb:1-5 (class/class)
+#   0.79…  billing · lib/billing.rb:1-5 (class/module)
+
+#    …scope to named members, and drop the graph hop, as you like
+bundle exec bin/cce search "charge" --workspace myproduct --package app,billing --no-graph --json
+
+# 5. Ecosystem stats and a federated dashboard (roll-up + per-package breakdown)
+bundle exec bin/cce stats     --workspace myproduct
+bundle exec bin/cce dashboard --workspace myproduct
+```
+
+**How it works.** Members are auto-detected by marker (`*.gemspec` → Ruby gem or
+engine; `Gemfile` + `config/application.rb` → Rails app; `package.json` →
+TypeScript/JavaScript) and never nest. Each member is indexed by the *normal*
+pipeline, so a member's store is **byte-identical to indexing it standalone** —
+language packs and secret scrubbing apply per member. A federated search is
+defined to equal a single standard retrieval over the **union** of the in-scope
+members' chunks, so it returns the same ranking as one index built over them.
+Cross-member **dependency edges** (read from `Gemfile` / `*.gemspec` /
+`package.json`) let a top result in one member expand into the members it depends
+on. See [`docs/workspace.md`](docs/workspace.md) for the full model.
 
 ## Embedders
 
@@ -214,7 +274,7 @@ aggregation formulas.
 bundle exec rake test
 ```
 
-The suite is deterministic and hermetic (no external network): **163 tests, ~93%
+The suite is deterministic and hermetic (no external network): **256 tests, ~94%
 line coverage** (SimpleCov; 1 skip is the live Ollama integration test, excluded
 from the default suite). The metrics subsystem's clock and id source are injected
 so its tests are deterministic despite the feature being time-based. See
@@ -227,6 +287,9 @@ coverage breakdown.
 |---|---|
 | [`SPEC.md`](SPEC.md) | The authoritative specification (SPEC v1.0). The source of truth for behaviour. |
 | [`SPEC-V2.md`](SPEC-V2.md) | The v2.0 evolution spec: pluggable language packs, `kind`, validators, conformance v2. |
+| [`SPEC-V2.1.md`](SPEC-V2.1.md) | The v2.1 evolution spec: secret & sensitive-file protection. |
+| [`SPEC-V2.2.md`](SPEC-V2.2.md) | The v2.2 evolution spec: workspaces / multi-codebase ecosystems. |
+| [`docs/workspace.md`](docs/workspace.md) | The workspace model, manifest format, detection rules, federation semantics, and strain points. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Newcomer path: install → first successful index + search. |
 | [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, switch to Ollama. |
 | [`docs/adding-a-language.md`](docs/adding-a-language.md) | Step-by-step guide to adding a language pack, with a worked example. |
@@ -270,9 +333,13 @@ lib/cce/                # implementation, one concern per file
   dashboard_page.rb     # self-contained dashboard HTML/CSS/JS (v1.1)
   dashboard_app.rb      # read-only request router (v1.1)
   dashboard_server.rb   # loopback WEBrick server (v1.1)
+  workspace.rb          # workspace namespace + constants (v2.2)
+  workspace/            # detector, manifest, dependencies, graph, indexer,
+                        #   federation, stats, dashboard (v2.2)
   cli.rb                # command-line dispatch
 test/                   # tests, written first
 test/fixture/samples/   # the seven byte-exact sample fixtures (pack self-tests + conformance corpus)
+test/fixture/workspace/ # the workspace fixture: app / billing / web (v2.2)
 docs/                   # architecture, DECISIONS, TDD, BENCHMARKS, TIMING, guides
 ```
 

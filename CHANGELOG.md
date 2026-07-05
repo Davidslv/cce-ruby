@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-07-05
+
+Workspace mode (SPEC-V2.2) — CCE can now understand an **ecosystem** of related
+codebases (e.g. a Rails app + engines + a frontend under one root) as a single
+searchable whole, while **each member stays isolated** in its own store. This is
+an additive minor release: absent `--workspace`, every command behaves exactly as
+before, and the single-repo `conformance.json` is byte-for-byte unchanged.
+
+### Added
+
+- **Auto-detection + manifest.** `cce workspace init [<dir>] [--force]` walks the
+  tree with the standard ignore rules and detects members by marker (`*.gemspec` →
+  Ruby gem/engine; `Gemfile` + `config/application.rb` → Rails app; `package.json`
+  → TypeScript/JavaScript). Members do not nest. It writes a deterministic,
+  reviewable `<dir>/.cce/workspace.yml`. `cce workspace list` prints members and
+  cross-member edges. New modules `CCE::Workspace::Detector` and `::Manifest`.
+- **Federated indexing.** `cce index --workspace [<dir>]` indexes each member into
+  its own `<member>/.cce/` via the normal pipeline (language packs + secret
+  scrubbing inherited). A member's store is **byte-identical to indexing that
+  member standalone** — isolation is preserved. New module `CCE::Workspace::Indexer`.
+- **Cross-member dependency edges (Level 1).** Declared dependencies are read from
+  each member's `*.gemspec` / `Gemfile` / `package.json`, and an edge `A → B` is
+  recorded when a name `A` declares equals member `B`'s package (or name). Written
+  deterministically to `<dir>/.cce/workspace-graph.json`. New modules
+  `CCE::Workspace::Dependencies` and `::Graph`.
+- **Federated search.** `cce search "q" --workspace [<dir>] [--package a,b]
+  [--top-k N] [--no-graph] [--json]` runs the standard §6 retrieval once over the
+  **union** of the in-scope members' chunks; each result is tagged with its
+  member; the diversity key is `(member, file_path)`; graph expansion uses each
+  member's intra-store import graph **plus** the cross-member edges. `--package`
+  scopes to named members (errors on an unknown name). New module
+  `CCE::Workspace::Federation` + `FederatedRetriever`.
+- **Workspace stats & dashboard.** `cce stats --workspace` shows per-member metrics,
+  totals, and edges. `cce dashboard --workspace` federates each member's
+  `metrics.jsonl` into one read-only, loopback-only roll-up with a `by_package`
+  breakdown. New modules `CCE::Workspace::Stats` and `::Dashboard`.
+- **Fixture.** `test/fixture/workspace/` — a minimal ecosystem (`app` / `billing`
+  / `web`) exercising detection, edges, isolation, federation == union, and the
+  cross-member graph hop.
+
+### Unchanged
+
+- Single-repo `index` / `search` / `stats` / `dashboard` / `packs` and the
+  secret-scrubbing layers behave exactly as in 2.1.0.
+- The cross-language conformance output (`conformance.json`) is byte-identical.
+
 ## [2.1.0] - 2026-07-05
 
 Secret & sensitive-file protection (SPEC-V2.1). Indexing becomes **secret-safe by

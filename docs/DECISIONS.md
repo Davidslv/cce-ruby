@@ -293,3 +293,52 @@ responsibility (yield in-scope file contents), keeps `Redactor` a pure
 string→string function that is trivial to unit-test and to match across
 languages, and means conformance (which builds chunks without the walker or
 indexer) is provably untouched.
+
+## D31 — A `ruby-engine` fixture needs a real engine marker
+
+**Ambiguity:** SPEC-V2.2 §8 lists the `billing` fixture as
+`billing.gemspec` + `lib/billing.rb` yet asserts it is detected as `ruby-engine`.
+Under §3 rule 1 a gemspec dir is a `ruby-engine` only if it *also* has `app/`,
+`config/routes.rb`, or `lib/**/engine.rb` — none of which a bare `lib/billing.rb`
+provides. **Decision:** honour the stated detection result and add the minimal
+marker that makes it true: the fixture engine carries a real
+`lib/billing/engine.rb`, so it is classified `ruby-engine` by the published rule
+rather than by a special case. The web member likewise carries the `tsconfig.json`
+that §3 rule 3 requires to be `typescript`. The detection code implements the
+rules verbatim; the fixture is shaped to satisfy them.
+
+## D32 — Store filename stays `.cce/index.db`, not `.cce/index.json`
+
+**Ambiguity:** SPEC-V2.2 refers to a member store as `<member>/.cce/index.json`.
+**Decision:** keep the existing SQLite store at `.cce/index.db` (the spec's
+`index.json` is abstract prose for "the member's store"). The normative properties
+the spec actually pins — a member store byte-identical to a standalone index, and
+federation equal to a union index — hold for the SQLite store (indexing is
+deterministic; verified in tests). The cross-language equivalence anchor remains
+the per-member `conformance.json`, never the raw store bytes.
+
+## D33 — Federation is a Retriever over the concatenated chunks
+
+**Ambiguity:** §6 defines a workspace search as "one §6 retrieval over the union
+of the in-scope members' stored chunks" and also lists a `(member, file_path)`
+diversity key and cross-member graph hops. **Decision:** implement it literally —
+`FederatedRetriever` builds a single ordinary `Retriever` over the concatenation
+of the members' stored chunks (member-relative paths unchanged) and tags each
+result with its member. This makes the "federation == union index" equivalence
+true by construction (the test compares against an independently-built `Retriever`
+over the same chunks). Cross-member hops are computed separately, after the base
+run, from the manifest edges, so they extend the result list without perturbing
+the base ranking. With members' file paths distinct, the `(member, file_path)`
+diversity key coincides with the plain `file_path` cap the base `Retriever`
+applies, so the anchor holds.
+
+## D34 — `--package` names members, and "package" labels the member
+
+**Ambiguity:** the manifest distinguishes a member's `name` (id) from its
+`package` (dependency name), while §6's `--package` flag and the result label are
+both spelled "package". **Decision:** `--package` scopes by **member name**, and a
+result's `package` field is the **member name**. The manifest `package` field is
+used only for edge resolution (matching one member's declared dependency to
+another member). This keeps the user-facing surface consistent — you scope and
+read results by the same member ids `workspace list` prints — while the
+dependency-name distinction stays an internal detail of edge building.
