@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Native gems: ruby_tree_sitter needs a C toolchain; sqlite3 links
       # against libsqlite3. See CONTRIBUTING.md ("System dependencies").
