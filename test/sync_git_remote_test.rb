@@ -69,9 +69,10 @@ class SyncGitRemoteTest < Minitest::Test
   end
 
   # Smoke test: proves `sync init` wires git-LFS for *.cce. It SKIPS when the
-  # git-lfs binary is absent (core tests never need it). Over a file:// remote
-  # LFS cannot smudge (no transfer endpoint), so we assert the routing — the
-  # committed blob is an LFS pointer and the putter keeps the real bytes locally.
+  # git-lfs binary is absent (core tests never need it). We assert LFS is
+  # genuinely configured and tracking the artifact — not the transfer mechanics,
+  # since git-lfs *can* smudge over a file:// remote (an earlier "get returns a
+  # pointer" assumption was wrong and flaked on CI, where git-lfs is installed).
   def test_lfs_smoke_or_skip
     skip "git-lfs not installed" unless CCE::Sync::Git.lfs_available?
 
@@ -83,11 +84,11 @@ class SyncGitRemoteTest < Minitest::Test
 
       attrs = File.read(File.join(dir, "clone", ".gitattributes"))
       assert_match(/\*\.cce filter=lfs/, attrs)
-      # locally the smudge/clean round-trip keeps the real bytes
+      # the clean/smudge round-trip preserves the real bytes in the working tree
       assert_equal "lfs-artifact-bytes", File.binread(File.join(dir, "clone", KEY))
-      # in git the blob is an LFS pointer (routing confirmed)
-      r2 = CCE::Sync::GitRemote.new(url: "file://#{bare}", clone_dir: File.join(dir, "clone2"), lfs: true)
-      assert_match(%r{git-lfs}, r2.get(KEY))
+      # git-lfs is genuinely tracking the committed *.cce artifact
+      lfs_listed = Dir.chdir(File.join(dir, "clone")) { %x(git lfs ls-files) }
+      assert_match(/\.cce/, lfs_listed)
     end
   end
 
