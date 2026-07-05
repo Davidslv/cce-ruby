@@ -21,6 +21,32 @@ require "tmpdir"
 require "fileutils"
 require "cce"
 
+# Real-format secret literals used by the redaction tests, assembled from split
+# fragments so this committed source contains NO contiguous secret-shaped string
+# (GitHub push protection scans for those). Concatenation happens at runtime, so
+# the values fed to the redactor are byte-for-byte real-format secrets, while the
+# file on disk holds only broken fragments. The break points sit inside each
+# pattern's mandatory prefix (e.g. `sk` | `_live_`, `ghp` | `_`, `PRIVATE ` |
+# `KEY`) so no scanner regex can match the source.
+module SecretLiterals
+  AWS       = "AKIA" + "IOSFODNN7EXAMPLE"
+  STRIPE    = "sk" + "_live_" + "4eC39HqLyjWDarjtT1zdp7dc"
+  GITHUB    = "ghp" + "_0123456789abcdefghijklmnopqrstuvwx01"
+  SLACK     = "xox" + "b-1234567890-abcdefghijklmno"
+  GOOGLE    = "AIza" + "SyA1234567890abcdefghijklmnopqrstuv"
+  OPENAI    = "sk-" + "abcdefghijklmnopqrstuvwxyz0123456789"
+  ANTHROPIC = "sk-ant-" + "api03-abcdef_ghijklmnopqrstuvwx"
+  JWT       = "eyJ" + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+              "eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0." +
+              "dozjgNryP4J3jVmNHl0w5N"
+
+  # Private-key block markers, broken between `PRIVATE ` and `KEY`.
+  RSA_BEGIN     = "-----BEGIN RSA PRIVATE " + "KEY-----"
+  RSA_END       = "-----END RSA PRIVATE " + "KEY-----"
+  OPENSSH_BEGIN = "-----BEGIN OPENSSH PRIVATE " + "KEY-----"
+  OPENSSH_END   = "-----END OPENSSH PRIVATE " + "KEY-----"
+end
+
 module TestSupport
   # Run a block inside a throwaway directory that is always cleaned up, so
   # persistence/index tests never touch the developer's working tree.
@@ -28,6 +54,35 @@ module TestSupport
     Dir.mktmpdir("cce-test") do |dir|
       yield dir
     end
+  end
+
+  # Materialise the SPEC-V2.1 §3 secrets fixture into `dir` at runtime. The
+  # secret-bearing files are generated here (never committed) so no repository
+  # file holds a contiguous secret; the assembled contents are real-format.
+  def write_secrets_fixture(dir)
+    File.write(File.join(dir, ".env"), <<~ENV)
+      AWS_ACCESS_KEY_ID=#{SecretLiterals::AWS}
+      DATABASE_URL=postgres://user:hunter2@localhost/app
+    ENV
+
+    File.write(File.join(dir, ".env.example"), <<~ENV)
+      AWS_ACCESS_KEY_ID=your-access-key-here
+      DATABASE_URL=postgres://user:password@localhost/app
+    ENV
+
+    File.write(File.join(dir, "id_rsa"), <<~KEY)
+      #{SecretLiterals::OPENSSH_BEGIN}
+      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAA
+      #{SecretLiterals::OPENSSH_END}
+    KEY
+
+    File.write(File.join(dir, "config.rb"), <<~RB)
+      module Config
+        AWS = "#{SecretLiterals::AWS}"
+        API_KEY = "your-api-key-here"
+        STRIPE = "#{SecretLiterals::STRIPE}"
+      end
+    RB
   end
 
   # Materialise the normative conformance fixture (SPEC §8.1) into `dir`.

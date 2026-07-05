@@ -249,3 +249,47 @@ or kept; the chunk section is the gate." **Decision:** Keep the query block
 (still deterministic and cross-language-identical) and add `kind` to the chunk
 manifest. The chunk section over the seven samples is the hard gate; keeping the
 query block costs nothing and preserves continuity with v1 tooling.
+
+# v2.1 decisions (SPEC-V2.1 — secret & sensitive-file protection)
+
+## D27 — Redaction runs before chunking, so the store derives from redacted text
+
+**Ambiguity:** SPEC-V2.1 §2 says the "redacted content is what gets chunked,
+embedded, and stored." **Decision:** `Indexer.index` redacts each file's content
+**once, up front**, and feeds that single redacted string to `chunk_file`,
+`extract_imports`, and `token_count` alike. So `chunk_id` and `token_count`
+derive from the redacted text (as required) and there is no code path where an
+un-redacted value reaches the store. Layer 2 is skipped entirely — not applied
+then reversed — when `--allow-secrets` is set.
+
+## D28 — Pattern 10 never re-redacts an already-redacted value
+
+**Ambiguity:** §1 runs specific patterns 1–9 then the generic assignment pattern
+10, but a secret-ish key whose value pattern 9 already redacted (e.g.
+`token = "ghp_…"` → `token = "[REDACTED:GITHUB_TOKEN]"`) would then match pattern
+10's key/operator/value shape, collapsing the specific label to
+`[REDACTED:SECRET]`. §3 pins the expected output with the **specific** label
+retained. **Decision:** pattern 10 treats a value beginning `[REDACTED:` as
+already-handled and leaves it untouched. The specific label always wins; both
+implementations must do the same to match §3 byte-for-byte.
+
+## D29 — Layer 1 classifies on the basename only, case-insensitively
+
+**Ambiguity:** §1 gives extensions "without the dot", exact basenames, and the
+dotenv rule, all "case-insensitive". **Decision:** `Sensitive.sensitive?` takes a
+**basename** (never a full path), lowercases it once, and tests exact-basename
+first, then the final extension (text after the last `.`), then the dotenv rule
+(`.env` / `.env.*` minus the safe-template suffixes). Directory ignore rules are
+unchanged and remain the walker's separate concern. The check is pure and
+side-effect-free so it can run before any file is opened.
+
+## D30 — Redaction lives in the indexer, not the walker
+
+**Ambiguity:** both layers are "secret protection", so one module could own both.
+**Decision:** keep them separate — Layer 1 (`Sensitive`) answers "should this file
+be read?" and is consulted by the walker; Layer 2 (`Redactor`) answers "scrub this
+content" and is applied by the indexer. This preserves the walker's single
+responsibility (yield in-scope file contents), keeps `Redactor` a pure
+string→string function that is trivial to unit-test and to match across
+languages, and means conformance (which builds chunks without the walker or
+indexer) is provably untouched.

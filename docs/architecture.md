@@ -69,9 +69,11 @@ wall-clock time (injected for tests); the core pipeline above is unchanged.
 
 ```
 CLI index
-  → Indexer.index(root, store_path, embedder)
-      → Walker.collect(root)                     # in-scope files (+ skipped count)
+  → Indexer.index(root, store_path, embedder, allow_secrets:)
+      → Walker.collect(root, allow_secrets:)     # in-scope files (+ skipped + sensitive_skipped)
+                                                 #   Layer 1: Sensitive.sensitive?(basename) → never read
       → for each file:
+          content = Redactor.redact(content)      # Layer 2: strip inline secrets → [REDACTED:LABEL]
           Chunker.chunk_file(content, rel)        # pack-driven function/class chunks (+ kind) or module fallback
           Chunker.extract_imports(content, rel)   # graph edges via the file's pack
           embedder.embed_batch(chunk contents)    # 256-dim vectors
@@ -81,6 +83,18 @@ CLI index
 The store is written idempotently: every write fully replaces the corpus, so
 re-indexing the same directory yields byte-identical state (chunk IDs are
 deterministic).
+
+**Secret protection (v2.1) is a write-path concern, split into two layers that
+both sit before persistence.** *Layer 1* (`CCE::Sensitive`, consulted by the
+walker) decides from a file's basename alone whether it is too sensitive to ever
+read — a private key, a credential file, a `.env` — and tallies it separately as
+`sensitive_skipped`. *Layer 2* (`CCE::Redactor`, applied by the indexer) scrubs
+high-confidence secrets out of each file's content **before** chunking, so
+`chunk_id`, `token_count`, the embedding, and the stored row all derive from the
+redacted text and the store never contains the secret. Both are deterministic and
+default-on; `--allow-secrets` disables both for a run. The seven sample fixtures
+carry no secrets, so both layers are no-ops over them and `conformance.json` is
+unchanged.
 
 ### Search (read path, fresh process)
 

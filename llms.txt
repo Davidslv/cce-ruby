@@ -54,5 +54,5 @@ Note: the metrics/dashboard subsystem (`lib/cce/metrics*.rb`, `lib/cce/dashboard
 ## Optional
 
 - [License (MIT)](LICENSE): MIT © 2026 David Silva.
-- [Security policy](SECURITY.md): Threat model (untrusted parsed input; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
-- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.
+- [Security policy](SECURITY.md): Threat model (untrusted parsed input; secret-safe-by-default indexing — sensitive files skipped + inline secrets redacted, `--allow-secrets` opts out; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.1.0 secret & sensitive-file protection (secure-by-default), 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.

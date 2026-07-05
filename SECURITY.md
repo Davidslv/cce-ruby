@@ -7,9 +7,9 @@ provided for the current minor series only.
 
 | Version | Supported |
 |---|---|
-| 1.1.x   | ✅ |
-| 1.0.x   | ✅ |
-| < 1.0   | ❌ |
+| 2.1.x   | ✅ |
+| 2.0.x   | ✅ |
+| < 2.0   | ❌ |
 
 ## Threat model
 
@@ -27,6 +27,23 @@ matters more than boilerplate, so here is the real picture.
   parse tree defensively.
 - **CCE does not execute the code it indexes.** It parses and analyses source;
   it never runs it, imports it, or evaluates it.
+- **Secrets are protected by default (v2.1).** Indexing is secret-safe unless you
+  opt out. **Layer 1**: files that are sensitive *by name* — private keys and
+  keystores (`pem`, `key`, `p12`, `pfx`, `keystore`, `jks`, `ppk`, `der`, `asc`),
+  credential files (`credentials.*`, `secrets.*`, `.netrc`, `.pgpass`,
+  `.htpasswd`, `.dockercfg`, `kubeconfig`, `id_rsa`/`id_dsa`/`id_ecdsa`/
+  `id_ed25519`), and `.env`/`.env.*` (safe `.example`/`.sample`/`.template`/
+  `.dist` templates excepted) — are **never read** and are tallied as
+  `sensitive_skipped`. **Layer 2**: high-confidence secrets found *inside*
+  indexed files (cloud/API keys, private-key blocks, JWTs, and guarded
+  `key = value` assignments) are **redacted to `[REDACTED:<LABEL>]` before the
+  content is chunked, embedded, or stored**, so the on-disk store never holds the
+  secret value. Both layers are deterministic. **Residual risk:** the store is
+  still a **local-only** artifact under `.cce/…` — protect that directory as you
+  would any local file; redaction is defence-in-depth, not a licence to index
+  untrusted secret material. The `--allow-secrets` flag disables **both** layers
+  for a run (it prints a warning), after which sensitive files are read and inline
+  secrets are stored verbatim — use it only deliberately.
 - **No network calls by default.** The default `hash` embedder is fully local
   and deterministic. The tool makes **no** outbound connections during normal
   `index`/`search`/`stats`/`conformance` operation. (A first run may download

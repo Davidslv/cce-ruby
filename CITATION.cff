@@ -16,7 +16,7 @@ authors:
 repository-code: "https://github.com/davidslv/cce-ruby"
 url: "https://github.com/davidslv/cce-ruby"
 license: MIT
-version: 2.0.0
+version: 2.1.0
 date-released: "2026-07-05"
 keywords:
   - code-search
