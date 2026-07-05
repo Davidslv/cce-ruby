@@ -7,9 +7,9 @@ provided for the current minor series only.
 
 | Version | Supported |
 |---|---|
-| 2.1.x   | ✅ |
-| 2.0.x   | ✅ |
-| < 2.0   | ❌ |
+| 2.3.x   | ✅ |
+| 2.2.x   | ✅ |
+| < 2.2   | ❌ |
 
 ## Threat model
 
@@ -53,6 +53,26 @@ matters more than boilerplate, so here is the real picture.
   **localhost HTTP** (`http://localhost:11434`). This is opt-in, localhost-only,
   and fails gracefully with a clear message if the server is unreachable. No
   other host is ever contacted.
+- **CCE Sync is opt-in, git-transported, and RBAC-free by design (v2.3).**
+  `cce sync …` is inert unless you configure a `sync.remote`. When configured, all
+  transport, authentication, and access control are **git's own** (SSH/HTTPS
+  credentials) — CCE reinvents no auth. Consequences to design for:
+  - **A sync-repo reader can pull every cache in it.** Access to a cached index is
+    exactly access to the sync git repo, *independent of source-repo access*.
+    Give the sync repo read access equal to the intended audience of every repo
+    cached in it; use **one sync repo per access boundary** for compartmentalized
+    projects. Scope any CI push credential to the **sync cache repo only** — a leak
+    grants write to the cache, never to your source.
+  - **Caches are proprietary code.** v2.1 redaction runs before any push, so
+    high-confidence secrets do not enter the cache, but chunk *content* is your
+    source — the git read gate is what protects it.
+  - **Only reproducible `hash` indexes are shareable.** `push` refuses a non-hash
+    (Ollama) index, so non-deterministic vectors never leave your machine.
+  - **Pull trusts the checksum; `verify` does not.** By default `pull` trusts the
+    artifact's recorded checksum (and rejects a self-inconsistent one). For
+    supply-chain assurance, `cce sync verify` **re-indexes locally and compares**,
+    so you never have to trust the pusher. A failed `push`/`pull` is best-effort
+    and never mutates the local `.cce/` store.
 - **The dashboard server is loopback-only, read-only, and self-contained (v1.1).**
   `cce dashboard` starts a WEBrick HTTP server **bound to `127.0.0.1`** — it does
   not listen on any external interface, so it is not reachable from the network.

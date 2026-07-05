@@ -24,6 +24,7 @@ require_relative "metrics_recorder"
 require_relative "dashboard_app"
 require_relative "dashboard_server"
 require_relative "workspace"
+require_relative "sync"
 
 module CCE
   class CLI
@@ -48,6 +49,7 @@ module CCE
       when "feedback"    then cmd_feedback(argv)
       when "dashboard"   then cmd_dashboard(argv)
       when "workspace"   then cmd_workspace(argv)
+      when "sync"        then cmd_sync(argv)
       when "help", "--help", "-h", nil then print_help; 0
       else
         @err.puts "unknown command: #{cmd}"
@@ -55,6 +57,9 @@ module CCE
         2
       end
     rescue Workspace::Error => e
+      @err.puts "error: #{e.message}"
+      1
+    rescue Sync::Error => e
       @err.puts "error: #{e.message}"
       1
     rescue Store::Error => e
@@ -590,6 +595,187 @@ module CCE
       end
     end
 
+    # ---- sync (SPEC-SYNC) ----------------------------------------------------
+
+    def cmd_sync(argv)
+      sub = argv.shift
+      case sub
+      when "init"   then cmd_sync_init(argv)
+      when "push"   then cmd_sync_push(argv)
+      when "pull"   then cmd_sync_pull(argv)
+      when "status" then cmd_sync_status(argv)
+      when "verify" then cmd_sync_verify(argv)
+      else usage_error("sync requires a subcommand: init | push | pull | status | verify")
+      end
+    end
+
+    def cmd_sync_init(argv)
+      remote = nil
+      lfs = true
+      repo_id = nil
+      parser = OptionParser.new do |o|
+        o.on("--remote URL") { |v| remote = v }
+        o.on("--lfs") { lfs = true }
+        o.on("--no-lfs") { lfs = false }
+        o.on("--repo-id ID") { |v| repo_id = v }
+      end
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+      return usage_error("sync init requires --remote <git-url>") if remote.to_s.empty?
+
+      res = Sync::Commands.new(project_dir: dir).init(remote_url: remote, lfs: lfs, repo_id: repo_id)
+      @out.puts "Configured sync remote: #{res[:remote]}"
+      @out.puts "repo_id: #{res[:repo_id]}"
+      @out.puts "LFS: #{res[:lfs] ? 'enabled (*.cce via git-LFS)' : 'disabled'}"
+      @out.puts "Local clone: #{res[:clone_dir]}"
+      @out.puts "Config: #{res[:config_path]}"
+      0
+    end
+
+    def cmd_sync_push(argv)
+      commit = nil
+      workspace = false
+      parser = OptionParser.new do |o|
+        o.on("--commit SHA") { |v| commit = v }
+        o.on("--workspace") { workspace = true }
+      end
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+      return cmd_sync_push_workspace(dir, commit: commit) if workspace
+
+      res = Sync::Commands.new(project_dir: dir).push(commit: commit)
+      verb = res[:status] == :unchanged ? "already cached" : "pushed"
+      @out.puts "#{verb} #{res[:repo_id]}@#{res[:sha][0, 12]} (#{res[:chunk_count]} chunks)"
+      @out.puts "  key:      #{res[:key]}"
+      @out.puts "  checksum: #{res[:checksum]}"
+      0
+    end
+
+    def cmd_sync_pull(argv)
+      commit = nil
+      latest = false
+      force = false
+      workspace = false
+      parser = OptionParser.new do |o|
+        o.on("--commit SHA") { |v| commit = v }
+        o.on("--latest") { latest = true }
+        o.on("--force") { force = true }
+        o.on("--workspace") { workspace = true }
+      end
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+      return cmd_sync_pull_workspace(dir, commit: commit, latest: latest, force: force) if workspace
+
+      res = Sync::Commands.new(project_dir: dir).pull(commit: commit, latest: latest, force: force)
+      @out.puts "Installed cache #{res[:repo_id]}@#{res[:sha][0, 12]} (#{res[:chunk_count]} chunks) into .cce/"
+      @out.puts "  checksum: #{res[:checksum]}"
+      if res[:tree_matches]
+        @out.puts "  working tree matches this commit — the pulled index is used as-is."
+      else
+        @out.puts "  note: working tree differs from this commit; run `cce index #{dir}` for a local index of your changes."
+      end
+      0
+    end
+
+    def cmd_sync_status(argv)
+      workspace = false
+      parser = OptionParser.new { |o| o.on("--workspace") { workspace = true } }
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+      return cmd_sync_status_workspace(dir) if workspace
+
+      s = Sync::Commands.new(project_dir: dir).status
+      unless s[:configured]
+        @out.puts "sync: not configured (run `cce sync init --remote <git-url>`)"
+        return 0
+      end
+      @out.puts "Remote:        #{s[:remote]}"
+      @out.puts "repo_id:       #{s[:repo_id] || '(unknown)'}"
+      @out.puts "HEAD:          #{s[:head] ? s[:head][0, 12] : '(not a git repo)'}#{s[:dirty] ? ' (dirty)' : ''}"
+      @out.puts "Local cache:   #{s[:local_sha] ? s[:local_sha][0, 12] : '(none)'}"
+      @out.puts "Remote latest: #{format_remote_latest(s[:remote_latest])}"
+      @out.puts "Tree matches:  #{s[:tree_matches] ? 'yes' : 'no'}"
+      0
+    end
+
+    def cmd_sync_verify(argv)
+      commit = nil
+      parser = OptionParser.new { |o| o.on("--commit SHA") { |v| commit = v } }
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+
+      res = Sync::Commands.new(project_dir: dir).verify(commit: commit)
+      if res[:match]
+        @out.puts "verify OK: re-indexed #{res[:sha][0, 12]} matches the cached checksum"
+        @out.puts "  checksum: #{res[:actual]}"
+        0
+      else
+        @err.puts "verify FAILED for #{res[:sha][0, 12]}"
+        @err.puts "  expected: #{res[:expected]}"
+        @err.puts "  rebuilt:  #{res[:actual]}"
+        1
+      end
+    end
+
+    def format_remote_latest(val)
+      case val
+      when nil then "(none)"
+      when :unreachable then "(unreachable)"
+      else val[0, 12]
+      end
+    end
+
+    # Build a per-member Commands sharing one remote (SPEC-SYNC §5 workspace).
+    def sync_workspace_members(dir)
+      root = File.expand_path(dir)
+      manifest = Workspace::Manifest.load(root)
+      base = Sync::Config.load(root)
+      raise Sync::Error, "no sync remote configured (run `cce sync init --remote <git-url>`)" unless base.configured?
+
+      remote = Sync::GitRemote.for_url(base.remote, lfs: base.lfs?)
+      base_repo_id = base.repo_id || Sync::ContentAddress.normalize_repo_id(Sync::Git.origin_url(root))
+      manifest.members.map do |m|
+        member_repo_id = Sync.member_repo_id(base_repo_id, m.package)
+        cfg = Sync::Config.new(base.data.merge("repo_id" => member_repo_id))
+        cmds = Sync::Commands.new(project_dir: File.join(root, m.path), config: cfg, remote: remote)
+        [m, cmds]
+      end
+    end
+
+    def cmd_sync_push_workspace(dir, commit:)
+      @out.puts "Workspace sync push:"
+      sync_workspace_members(dir).each do |m, cmds|
+        res = cmds.push(commit: commit)
+        verb = res[:status] == :unchanged ? "cached" : "pushed"
+        @out.puts "  #{m.name} [#{m.package}]: #{verb} @#{res[:sha][0, 12]} (#{res[:chunk_count]} chunks) #{res[:checksum][0, 12]}"
+      end
+      0
+    end
+
+    def cmd_sync_pull_workspace(dir, commit:, latest:, force:)
+      @out.puts "Workspace sync pull:"
+      sync_workspace_members(dir).each do |m, cmds|
+        res = cmds.pull(commit: commit, latest: latest, force: force)
+        @out.puts "  #{m.name} [#{m.package}]: installed @#{res[:sha][0, 12]} (#{res[:chunk_count]} chunks) #{res[:checksum][0, 12]}"
+      end
+      0
+    end
+
+    def cmd_sync_status_workspace(dir)
+      @out.puts "Workspace sync status:"
+      sync_workspace_members(dir).each do |m, cmds|
+        s = cmds.status
+        local = s[:local_sha] ? s[:local_sha][0, 12] : "(none)"
+        @out.puts "  #{m.name} [#{m.package}]: local #{local} · remote #{format_remote_latest(s[:remote_latest])}"
+      end
+      0
+    end
+
     def usage_error(msg)
       @err.puts "error: #{msg}"
       2
@@ -616,6 +802,13 @@ module CCE
           cce search <query> --workspace [<dir>] [--package a,b] [--top-k N] [--no-graph] [--json]
           cce stats      --workspace [<dir>]     per-member + totals + edges
           cce dashboard  --workspace [<dir>]     roll-up + per-package breakdown
+
+        Sync (offline-first, content-addressed cache over a git remote):
+          cce sync init --remote <git-url> [--lfs|--no-lfs] [--repo-id ID] [<dir>]
+          cce sync push   [--commit SHA] [--workspace] [<dir>]
+          cce sync pull   [--commit SHA | --latest] [--force] [--workspace] [<dir>]
+          cce sync status [--workspace] [<dir>]
+          cce sync verify [--commit SHA] [<dir>]
       HELP
     end
   end
