@@ -23,6 +23,7 @@ require_relative "metrics_event_log"
 require_relative "metrics_recorder"
 require_relative "dashboard_app"
 require_relative "dashboard_server"
+require_relative "workspace"
 
 module CCE
   class CLI
@@ -46,12 +47,16 @@ module CCE
       when "conformance" then cmd_conformance(argv)
       when "feedback"    then cmd_feedback(argv)
       when "dashboard"   then cmd_dashboard(argv)
+      when "workspace"   then cmd_workspace(argv)
       when "help", "--help", "-h", nil then print_help; 0
       else
         @err.puts "unknown command: #{cmd}"
         print_help
         2
       end
+    rescue Workspace::Error => e
+      @err.puts "error: #{e.message}"
+      1
     rescue Store::Error => e
       @err.puts "error: #{e.message}"
       1
@@ -94,14 +99,18 @@ module CCE
       metrics = nil
       no_metrics = false
       allow_secrets = false
+      workspace = false
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--embedder NAME") { |v| embedder = v }
         o.on("--metrics PATH") { |v| metrics = v }
         o.on("--no-metrics") { no_metrics = true }
         o.on("--allow-secrets") { allow_secrets = true }
+        o.on("--workspace") { workspace = true }
       end
       rest = parser.parse(argv)
+      return cmd_index_workspace(rest, embedder: embedder, allow_secrets: allow_secrets, no_metrics: no_metrics) if workspace
+
       dir = rest.shift
       return usage_error("index requires a <dir>") unless dir
       return usage_error("no such directory: #{dir}") unless File.directory?(dir)
@@ -142,6 +151,8 @@ module CCE
       top_k = Config::DEFAULT_TOP_K
       graph = true
       as_json = false
+      workspace = false
+      packages = nil
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--dir PATH") { |v| dir = v }
@@ -150,8 +161,14 @@ module CCE
         o.on("--top-k N", Integer) { |v| top_k = v }
         o.on("--no-graph") { graph = false }
         o.on("--json") { as_json = true }
+        o.on("--workspace") { workspace = true }
+        o.on("--package LIST") { |v| packages = v.split(",").map(&:strip).reject(&:empty?) }
       end
       rest = parser.parse(argv)
+      if workspace
+        return cmd_search_workspace(rest, packages: packages, top_k: top_k, graph: graph, as_json: as_json)
+      end
+
       query = rest.join(" ")
       return usage_error("search requires a <query>") if query.strip.empty?
 
@@ -233,11 +250,15 @@ module CCE
     def cmd_stats(argv)
       store = nil
       dir = nil
+      workspace = false
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--dir PATH") { |v| dir = v }
+        o.on("--workspace") { workspace = true }
       end
       rest = parser.parse(argv)
+      return cmd_stats_workspace(rest) if workspace
+
       store ||= dir ? default_store_for(dir) : (rest.first ? default_store_for(rest.first) : nil)
       return usage_error("stats requires --dir or --store") unless store
 
@@ -391,14 +412,17 @@ module CCE
       metrics = nil
       port = Metrics::DEFAULT_DASHBOARD_PORT
       _no_open = false
+      workspace = false
       parser = OptionParser.new do |o|
         o.on("--store PATH") { |v| store = v }
         o.on("--dir PATH") { |v| dir = v }
         o.on("--metrics PATH") { |v| metrics = v }
         o.on("--port N", Integer) { |v| port = v }
         o.on("--no-open") { _no_open = true }
+        o.on("--workspace") { workspace = true }
       end
-      parser.parse(argv)
+      rest = parser.parse(argv)
+      return cmd_dashboard_workspace(rest, port: port) if workspace
 
       mpath = metrics_path_for(metrics: metrics, store: store, dir: dir)
       return usage_error("dashboard requires --dir, --store or --metrics") unless mpath
@@ -413,6 +437,157 @@ module CCE
       trap("TERM") { server.stop }
       server.start
       0
+    end
+
+    # ---- workspace (SPEC-V2.2) -----------------------------------------------
+
+    def cmd_workspace(argv)
+      sub = argv.shift
+      case sub
+      when "init" then cmd_workspace_init(argv)
+      when "list" then cmd_workspace_list(argv)
+      else usage_error("workspace requires a subcommand: init | list")
+      end
+    end
+
+    def cmd_workspace_init(argv)
+      force = false
+      parser = OptionParser.new { |o| o.on("--force") { force = true } }
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+
+      manifest = Workspace::Manifest.detect(dir)
+      path = manifest.write(dir, force: force)
+      @out.puts "Wrote #{path}"
+      print_members(manifest.members)
+      0
+    end
+
+    def cmd_workspace_list(argv)
+      rest = OptionParser.new.parse(argv)
+      dir = rest.shift || "."
+      manifest = Workspace::Manifest.load(dir)
+      @out.puts "Workspace: #{manifest.name} (#{manifest.members.length} members)"
+      print_members(manifest.members)
+      print_edges(Workspace::Graph.build(dir, manifest)[:edges])
+      0
+    end
+
+    def cmd_index_workspace(rest, embedder:, allow_secrets:, no_metrics:)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+
+      if allow_secrets
+        @err.puts "warning: --allow-secrets is set; secret protection is DISABLED " \
+                  "(sensitive files are read and secrets are stored verbatim)"
+      end
+
+      summary = Workspace::Indexer.index(dir, embedder: embedder,
+                                         allow_secrets: allow_secrets, record_metrics: !no_metrics)
+      @out.puts "Workspace index: #{summary[:members].length} members"
+      summary[:members].each do |m|
+        @out.puts "  #{m[:name]} [#{m[:type]}]: #{m[:files]} files, #{m[:chunks]} chunks"
+      end
+      @out.puts "Totals: #{summary[:totals][:files]} files, #{summary[:totals][:chunks]} chunks"
+      @out.puts "Graph: #{summary[:graph][:edges].length} cross-member edges -> #{summary[:graph_path]}"
+      0
+    end
+
+    def cmd_search_workspace(rest, packages:, top_k:, graph:, as_json:)
+      query = rest.shift
+      return usage_error("search requires a <query>") if query.nil? || query.strip.empty?
+
+      dir = rest.shift || "."
+      manifest = Workspace::Manifest.load(dir)
+      members = Workspace::Federation.scope_members(manifest, packages)
+      loaded = Workspace::Federation.load_members(dir, members)
+      cross_edges = Workspace::Graph.load(dir)[:edges]
+      retriever = Workspace::FederatedRetriever.new(members: loaded, cross_edges: cross_edges)
+      results = retriever.search(query, top_k: top_k, graph_enabled: graph)
+
+      query_id = Metrics::RandomIdSource.new.next_id
+      if as_json
+        @out.puts JSON.generate(query_id: query_id, results: results.map { |r| workspace_json_result(r) })
+      else
+        print_workspace_human(results)
+      end
+      0
+    end
+
+    def cmd_stats_workspace(rest)
+      dir = rest.shift || "."
+      manifest = Workspace::Manifest.load(dir)
+      data = Workspace::Stats.compute(dir, manifest)
+      @out.puts "Workspace: #{manifest.name}"
+      data[:members].each do |m|
+        status = m[:indexed] ? "#{m[:files]} files, #{m[:chunks]} chunks" : "(not indexed)"
+        @out.puts "  #{m[:name]} [#{m[:type]}]: #{status}"
+        kinds = m[:by_kind].sort.map { |k, c| "#{k}=#{c}" }.join(", ")
+        @out.puts "    kinds: #{kinds}" unless kinds.empty?
+      end
+      @out.puts "Totals: #{data[:totals][:files]} files, #{data[:totals][:chunks]} chunks"
+      print_edges(data[:edges])
+      0
+    end
+
+    def cmd_dashboard_workspace(rest, port:)
+      dir = rest.shift || "."
+      manifest = Workspace::Manifest.load(dir)
+      app = Workspace::Dashboard::App.new(
+        root: dir, manifest: manifest, price: Metrics::DEFAULT_INPUT_PRICE_PER_MILLION
+      )
+      server = Dashboard::Server.new(app: app, host: "127.0.0.1", port: port)
+      @out.puts "CCE workspace dashboard (read-only, loopback-only) at #{server.url}"
+      @out.puts "Federating #{manifest.members.length} members from #{File.expand_path(dir)}"
+      @out.puts "Press Ctrl-C to stop."
+      @out.flush
+      trap("INT") { server.stop }
+      trap("TERM") { server.stop }
+      server.start
+      0
+    end
+
+    def print_members(members)
+      @out.puts "Members (#{members.length}):"
+      members.each do |m|
+        @out.puts "  #{m.name} [#{m.type}] #{m.path} (package: #{m.package})"
+      end
+    end
+
+    def print_edges(edges)
+      @out.puts "Edges (#{edges.length}):"
+      if edges.empty?
+        @out.puts "  (none)"
+      else
+        edges.each { |e| @out.puts "  #{e[:from]} -> #{e[:to]} (#{e[:via]})" }
+      end
+    end
+
+    def workspace_json_result(r)
+      {
+        rank: r[:rank],
+        package: r[:package],
+        chunk_id: r[:chunk_id],
+        file_path: r[:file_path],
+        start_line: r[:start_line],
+        end_line: r[:end_line],
+        chunk_type: r[:chunk_type],
+        kind: r[:kind],
+        score: NumericFormat.fmt6(r[:score])
+      }
+    end
+
+    def print_workspace_human(results)
+      if results.empty?
+        @out.puts "(no results)"
+        return
+      end
+      results.each do |r|
+        @out.puts "#{NumericFormat.fmt6(r[:score])}  #{r[:package]} · " \
+                  "#{r[:file_path]}:#{r[:start_line]}-#{r[:end_line]} " \
+                  "(#{r[:chunk_type]}/#{r[:kind]})"
+      end
     end
 
     def usage_error(msg)
@@ -433,6 +608,14 @@ module CCE
           cce conformance <fixture-dir> [-o conformance.json]
           cce feedback <query-id> --helpful|--not-helpful [--note "..."] [--dir DIR | --store PATH]
           cce dashboard [--dir DIR | --store PATH] [--port N] [--metrics PATH] [--no-open]
+
+        Workspaces (multi-codebase ecosystems):
+          cce workspace init [<dir>] [--force]   detect members -> .cce/workspace.yml
+          cce workspace list [<dir>]             members + cross-member edges
+          cce index      --workspace [<dir>]     index each member + build graph
+          cce search <query> --workspace [<dir>] [--package a,b] [--top-k N] [--no-graph] [--json]
+          cce stats      --workspace [<dir>]     per-member + totals + edges
+          cce dashboard  --workspace [<dir>]     roll-up + per-package breakdown
       HELP
     end
   end

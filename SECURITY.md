@@ -68,6 +68,21 @@ matters more than boilerplate, so here is the real picture.
   command and never raises), and it records only what you searched/indexed and
   your feedback — it is not transmitted anywhere.
 
+### Workspace mode (v2.2)
+
+Workspace mode adds no new trust boundary. Two consequences worth stating:
+
+- **Workspace metadata is non-secret.** `.cce/workspace.yml` and
+  `.cce/workspace-graph.json` hold only member names, relative paths, types,
+  declared dependency names, and edges — derived from files already in the repo.
+  They are safe to commit and review.
+- **Per-member secret scrubbing still applies, unchanged.** `cce index
+  --workspace` runs the *normal* pipeline per member, so Layer 1 (sensitive-file
+  skipping) and Layer 2 (inline-secret redaction) protect each member's store
+  exactly as for a standalone repo. A member's store is byte-identical to
+  indexing that member alone, secrets included. The federated dashboard is
+  loopback-only and read-only, like the single-repo dashboard.
+
 ### Out of scope
 
 - Compromise resulting from running CCE against a directory you do not trust

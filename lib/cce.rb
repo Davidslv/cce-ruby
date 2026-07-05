@@ -7,7 +7,7 @@
 #   - Own no other logic itself.
 
 module CCE
-  VERSION = "2.1.0"
+  VERSION = "2.2.0"
 
   @registry = nil
 
@@ -59,4 +59,5 @@ require_relative "cce/metrics_aggregator"
 require_relative "cce/dashboard_page"
 require_relative "cce/dashboard_app"
 require_relative "cce/dashboard_server"
+require_relative "cce/workspace"
 require_relative "cce/cli"

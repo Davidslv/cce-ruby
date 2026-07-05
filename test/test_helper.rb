@@ -85,6 +85,22 @@ module TestSupport
     RB
   end
 
+  # Absolute path to the committed workspace fixture (SPEC-V2.2 §8).
+  def workspace_fixture_dir
+    File.expand_path("fixture/workspace", __dir__)
+  end
+
+  # Copy the workspace fixture into a throwaway dir and yield its root, so
+  # workspace index/search tests never write into the committed fixture tree.
+  def with_workspace_fixture
+    with_tmpdir do |dir|
+      root = File.join(dir, "workspace")
+      FileUtils.mkdir_p(root)
+      FileUtils.cp_r("#{workspace_fixture_dir}/.", root)
+      yield root
+    end
+  end
+
   # Materialise the normative conformance fixture (SPEC §8.1) into `dir`.
   def write_fixture(dir)
     File.write(File.join(dir, "auth.py"), <<~PY)

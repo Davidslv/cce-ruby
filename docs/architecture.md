@@ -274,3 +274,34 @@ Being honest about the edges of the design:
   round at the same boundaries. A subtle refactor that reorders floating-point
   accumulation could, in principle, diverge in the last decimal — which is why
   rounding is centralised and conformance is a gate.
+
+## Workspaces (v2.2)
+
+Workspace mode (SPEC-V2.2) layers an *ecosystem* view over the single-repo engine
+without changing it. It lives entirely under `CCE::Workspace` and is purely
+additive: absent `--workspace`, every command and the `conformance.json` output
+are untouched.
+
+- **Federated, not centralised.** The three pillars are auto-detection into a
+  reviewable manifest, federated storage (each member indexed into its *own*
+  `<member>/.cce/` by the normal pipeline), and Level-1 cross-member dependency
+  edges. The only central state is two metadata files at the root
+  (`workspace.yml`, `workspace-graph.json`). A member's store is **byte-identical
+  to indexing it standalone**, which is what keeps per-member isolation — and the
+  per-member conformance gate — intact.
+- **Federation is defined as the union.** `FederatedRetriever` builds a single
+  ordinary `Retriever` over the concatenation of the in-scope members' stored
+  chunks. This makes "a workspace search equals one §6 retrieval over the union"
+  literally true by construction, so the equivalence is provable rather than
+  approximated. Cross-member graph hops are a bounded expansion layered on top,
+  driven by the manifest-derived edges, so they never perturb the base ranking.
+- **Component model.** `Detector` (markers → members) → `Manifest` (deterministic
+  YAML) → `Dependencies` (manifest parsing) → `Graph` (edges) → `Indexer`
+  (per-member indexing + graph) → `Federation`/`FederatedRetriever` (search) and
+  `Stats`/`Dashboard` (federated views). Each has one concern and a why/what
+  header; none owns retrieval or persistence — they compose the existing pieces.
+- **Where it strains.** Reloading many member stores per query bounds how large an
+  ecosystem stays fast; edges are limited to *declared* manifest dependencies
+  (not Rails route mounting or path aliases yet); detection is heuristic, which is
+  why the manifest is generated once and then hand-editable. See
+  [`workspace.md`](workspace.md) for the full treatment.
