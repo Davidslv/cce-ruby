@@ -20,15 +20,19 @@ byte-for-byte unchanged.
 
 ### Added
 
-- **Portable interchange artifact (SPEC-SYNC §2).** `CCE::Sync::Artifact` exports
-  a store to a canonical, byte-exact, newline-delimited stream (manifest line →
-  one compact sorted-key JSON object per chunk, sorted by
-  `(file_path, start_line, chunk_id)` → import graph) and imports it back
-  losslessly. **Embeddings are base64 of 256 little-endian IEEE-754 `f64` bytes**
-  (not decimals), so vectors are bit-identical across languages. `checksum` is the
-  lowercase-hex SHA-256 over the canonical bytes with the provenance keys
-  (`checksum`, `built_at`, `built_by`) omitted — the value the two engines diff to
-  prove interoperability.
+- **Portable interchange artifact (SPEC-SYNC §2 + SPEC-SYNC-RECONCILE).**
+  `CCE::Sync::Artifact` exports a store to the single canonical, byte-exact stream
+  both engines reconciled on: a manifest line (keys `cce_version`, `checksum`,
+  `chunk_count`, `embedder`, `file_tokens`, `pack_set_id`, `repo_id`, `sha`) → one
+  compact sorted-key JSON object per chunk (keys incl. `id` and an explicit
+  `language`), sorted by `(file_path, start_line, id)` → a graph line
+  `{"edges":[…],"nodes":[…]}`; LF after every line. **Embeddings are standard
+  padded base64 of 256 little-endian IEEE-754 `f64` bytes** (not decimals), so
+  vectors are bit-identical across languages. No provenance is stored, so the file
+  is reproducible; `checksum` is the lowercase-hex SHA-256 over the entire stream
+  serialized with `checksum:""` — the value the two engines diff to prove
+  interoperability. Import round-trips losslessly (chunk fields, vectors,
+  `file_tokens`, and the import graph).
 - **Content address (§3).** `CCE::Sync::ContentAddress` keys a cache at
   `<embedder>/<cce_ver>/<repo_id>/<sha>.cce`, with `repo_id` derived from the git
   origin or overridden via `--repo-id`.

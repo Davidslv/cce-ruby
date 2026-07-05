@@ -118,20 +118,23 @@ pusher.
 
 | gate | result |
 |------|--------|
-| `bundle exec rake test` | **311 runs, 1304 assertions, 0 failures, 0 errors, 1 skip** (the pre-existing Ollama skip) |
-| Line coverage | **94.13%** (≥ 93% required) |
+| `bundle exec rake test` | **316 runs, 1321 assertions, 0 failures, 0 errors, 1 skip** (the pre-existing Ollama skip) |
+| Line coverage | **94.21%** (≥ 93% required) |
 | `conformance.json` (single-repo) | **byte-identical** to `main` (unchanged) |
-| Cross-language golden checksum | pinned in `test/sync_artifact_test.rb` (`GOLDEN_CHECKSUM`) for the orchestrator to diff against Rust |
+| Cross-language golden | pinned in `test/sync_artifact_test.rb` (`GOLDEN_CHECKSUM`), which also emits `/tmp/cce_artifact_ruby.cce` for a byte-for-byte diff against Rust |
 | Cold-start walkthrough | **runs verbatim** (this transcript) |
 
-### Cross-language diff target
+### Cross-language diff target (reconciled format)
 
-For the fixed fixture (`auth.py` + `pay.py` from `SYNC_SAMPLE`) at
-`repo_id="github.com__acme__demo"`, `sha="d"×40`, the Ruby engine produces:
+Per [`SPEC-SYNC-RECONCILE.md`](../SPEC-SYNC-RECONCILE.md), the shared golden
+indexes `test/fixture/samples` (byte-identical in both repos) and builds the
+artifact with `repo_id="cce/demo"` and `sha="0"×40`. The Ruby engine produces:
 
 ```
-70b6fb9312df793f01b20c6644e2dec705e1bc2538c63ae33d709b25a2220c62
+581cbd0ff682a38d7d1250f3eec44f4ce456bdd660d4cb29aaaadd9e95072f48
 ```
 
-The Rust engine, given the same fixture@sha and the same pack set, must produce
-the **same** checksum (SPEC-SYNC §10). This is the value to diff.
+Running `test_shared_golden_checksum_and_emit` also writes the raw artifact bytes
+to **`/tmp/cce_artifact_ruby.cce`** (63,097 bytes) so the orchestrator can
+`diff /tmp/cce_artifact_ruby.cce /tmp/cce_artifact_rust.cce` byte-for-byte. The two
+files MUST be identical and the two checksums equal (SPEC-SYNC §10).

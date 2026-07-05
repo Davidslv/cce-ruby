@@ -75,55 +75,63 @@ artifact** both engines export and import. It is specified byte-exactly so the
 blob for `repo@sha` is identical across people and across both engines, and so
 `--verify` works cross-language.
 
-**Layout.** A UTF-8, LF-terminated, newline-delimited stream:
+The canonical format is pinned in
+[`SPEC-SYNC-RECONCILE.md`](../SPEC-SYNC-RECONCILE.md) (the single format both
+engines reconciled on). **Layout.** A UTF-8 stream with **LF after every line,
+including the last**; all JSON compact (no insignificant whitespace) with keys
+sorted lexicographically:
 
 ```
 line 1        the manifest, as one compact sorted-key JSON object
 lines 2..n-1  one compact sorted-key JSON object per chunk,
-              sorted by (file_path, start_line, chunk_id)
-line n        the import graph, as one compact sorted-key JSON object
+              sorted by (file_path, start_line, id)
+line n        the graph, as {"edges":[…],"nodes":[…]}
 ```
 
-**Manifest** (line 1) — keys sorted, compact separators:
+**Manifest** (line 1) — exactly these keys, sorted; **no provenance** (no
+`built_at`/`built_by`), so the file is reproducible:
 
 ```json
-{"built_at":"…","built_by":"cce-ruby","checksum":"…","cce_version":"2.3","chunk_count":3,"embedder":"hash","pack_set_id":"c,javascript,python,ruby,rust,typescript","repo_id":"github.com__acme__billing","sha":"…"}
+{"cce_version":"2.3","checksum":"…","chunk_count":3,"embedder":"hash","file_tokens":{"src/auth.py":18},"pack_set_id":"c,javascript,python,ruby,rust,typescript","repo_id":"github.com__acme__billing","sha":"…"}
 ```
 
-**Chunk object** — one per line (the key is `id`, per the spec):
+`file_tokens` is a sorted-key object of whole-file token counts (the dashboard
+baseline, DASHBOARD §3), carried so the round-trip is fully lossless.
+
+**Chunk object** — one per line, exactly these keys (`id`, and an explicit
+`language`):
 
 ```json
-{"chunk_type":"function","content":"def …","embedding":"<base64>","end_line":4,"file_path":"src/auth.py","id":"…","kind":"function_definition","start_line":3,"token_count":12}
+{"chunk_type":"function","content":"def …","embedding":"<base64>","end_line":4,"file_path":"src/auth.py","id":"…","kind":"function_definition","language":"python","start_line":3,"token_count":12}
 ```
 
-- **Embeddings are NOT decimals.** A 256-d vector is encoded as **base64 of its
-  256 little-endian IEEE-754 `f64` values** (2048 raw bytes). The hash embedder is
-  deterministic, so these bytes are already bit-equal across Ruby and Rust —
-  base64 sidesteps any float→string formatting difference.
-- **Every JSON object** uses sorted keys and compact separators (`,` `:`, no
-  insignificant whitespace).
+- **Embeddings are NOT decimals.** A 256-d vector is **standard padded base64
+  (no newlines) of its 256 little-endian IEEE-754 `f64` values** (2048 raw bytes).
+  The hash embedder is deterministic, so these bytes are bit-equal across Ruby and
+  Rust — base64 sidesteps any float→string formatting difference.
 
-**Graph** (line n) — `file_path → [imported module names]`, only for files with
-imports:
+**Graph** (line n) — `{"edges":[…],"nodes":[…]}`. `nodes` are the corpus files,
+one `{"id": path}` each, sorted by `id`; `edges` are the resolved file→file import
+relations `{"source","target","type":"import"}`, sorted by `(source, target,
+type)`:
 
 ```json
-{"src/payments.py":["auth"]}
+{"edges":[{"source":"src/payments.py","target":"src/auth.py","type":"import"}],"nodes":[{"id":"src/auth.py"},{"id":"src/payments.py"}]}
 ```
 
-**Checksum.** `checksum` is the lowercase-hex **SHA-256 over the canonical
-bytes** with the three *provenance* keys omitted from the manifest —
-`checksum` (the digest itself), `built_at`, and `built_by`. Those three differ
-between builders (CI at one time, a teammate at another) and are therefore
-**excluded from the digest**; if they were included, the "byte-identical across
-people" guarantee would be false. Everything that actually determines the index —
-the identity fields (`cce_version`, `chunk_count`, `embedder`, `pack_set_id`,
-`repo_id`, `sha`) plus every chunk and the graph — is covered. The `checksum` is
-the value the two engines diff to prove interoperability.
+**Checksum.** `checksum` is the lowercase-hex **SHA-256 over the ENTIRE canonical
+stream built with the manifest's `checksum` value set to the empty string `""`**;
+the real hex is then written into the `checksum` field of the emitted artifact.
+Verify = read the artifact, set `checksum` to `""`, re-hash, compare. There is no
+provenance to special-case, and everything that determines the index — the
+identity fields, `file_tokens`, every chunk, and the graph — is covered. The
+`checksum` is the value the two engines diff to prove interoperability.
 
-**Round-trip.** Import re-creates the store losslessly: chunk fields, bit-exact
-vectors, and the import graph. A chunk's `language` is **recomputed from its
-path** (it is a pure function of the path via the pack registry), so the artifact
-need not carry it. An imported store re-exports to the identical checksum.
+**Round-trip.** Import re-creates the store losslessly: chunk fields (incl. the
+explicit `language`), bit-exact vectors, whole-file token counts, and the import
+graph (file_imports are reconstructed from the edges so the rebuilt store's
+graph-expansion — and graph-enabled search — is identical). An imported store
+re-exports to byte-identical bytes.
 
 ---
 

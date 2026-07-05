@@ -75,7 +75,7 @@ module CCE
 
         store = ensure_hash_index!
         repo_id = resolve_repo_id
-        art = Artifact.export(store, repo_id: repo_id, sha: sha, built_at: commit_time(sha))
+        art = Artifact.export(store, repo_id: repo_id, sha: sha)
         key = ContentAddress.key(repo_id: repo_id, sha: sha)
         result = guard_remote { remote.put(key, art[:bytes]) }
         write_marker(repo_id: repo_id, sha: sha, key: key, checksum: art[:checksum])
@@ -276,12 +276,6 @@ module CCE
           CCE::Indexer.index(@project_dir, store_path: store, embedder: SHAREABLE_EMBEDDER)
           Artifact.export(store, repo_id: repo_id, sha: sha)[:checksum]
         end
-      end
-
-      def commit_time(sha)
-        Git.run("show", "-s", "--format=%cI", sha, dir: @project_dir).strip
-      rescue Git::GitError
-        ""
       end
 
       def marker_path

@@ -424,3 +424,38 @@ documented flow is `cce index` then `cce sync push`, and re-indexing a large rep
 on every push would be wasteful. `verify` is the counterpart that rebuilds from
 scratch when you want the guarantee. A failed remote operation raises a clear
 `Sync::Error` and never mutates the local store (offline-first §9).
+
+## D41 — Artifact reconciled to the single canonical format (supersedes D35, D36, D38)
+
+**Context:** the Ruby and Rust engines initially diverged on the interchange
+artifact, so cross-engine byte-identity (SPEC-SYNC §10, a hard requirement) did not
+hold. `SPEC-SYNC-RECONCILE.md` pins the single canonical format. **Decision:** align
+exactly, which reverses three earlier local calls:
+
+- **Provenance is removed entirely (supersedes D35).** The manifest no longer
+  carries `built_at`/`built_by`; dropping them makes the whole file reproducible,
+  so there is nothing to special-case. The checksum is now SHA-256 over the ENTIRE
+  canonical stream serialized with the manifest's `checksum` value set to `""`
+  (the real hex is then written into the field). Verify sets `checksum` back to
+  `""` and re-hashes.
+- **`language` is an explicit chunk field (supersedes D36).** It is serialized on
+  every chunk object rather than recomputed from the path on import, so the two
+  engines carry identical bytes and import is trivially lossless.
+- **`file_tokens` is carried in the manifest (supersedes D38).** Whole-file token
+  counts ship as a sorted-key `file_tokens` object, so a pulled store restores the
+  dashboard baseline too — the round-trip is now fully lossless, not just
+  functionally so.
+- **The graph is `{"edges":[…],"nodes":[…]}`.** Nodes are the corpus files
+  (`{"id": path}`, sorted by id); edges are the resolved file→file import relations
+  (`{"source","target","type":"import"}`, sorted by `(source,target,type)`). On
+  import, `file_imports` is reconstructed from the edges (each edge → an import of
+  the target's stem) so the rebuilt store's `GraphStore` yields identical adjacency
+  and identical graph-enabled search. Manifest keys are exactly
+  `{cce_version, checksum, chunk_count, embedder, file_tokens, pack_set_id,
+  repo_id, sha}`; embeddings are standard **padded** base64 of 256 LE f64; every
+  line (including the last) ends in LF.
+
+The shared golden is `test/fixture/samples` built with `repo_id="cce/demo"`,
+`sha="0"×40` → checksum
+`581cbd0ff682a38d7d1250f3eec44f4ce456bdd660d4cb29aaaadd9e95072f48`; the golden test
+also writes `/tmp/cce_artifact_ruby.cce` for a byte-for-byte diff against Rust.

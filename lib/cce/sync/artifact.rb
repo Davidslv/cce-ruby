@@ -1,20 +1,21 @@
 # WHY: The Ruby store is SQLite and the Rust store is JSON, so a shared cache
-#      cannot be either native store. The artifact is a canonical, deterministic
-#      interchange format both engines export and import, specified byte-exactly
-#      so the blob for repo@sha is identical across people and across both
-#      engines and `--verify` works cross-language (SPEC-SYNC §2, §10).
+#      cannot be either native store. The artifact is the single canonical,
+#      deterministic interchange format both engines export and import, specified
+#      byte-exactly (SPEC-SYNC §2, §10 + SPEC-SYNC-RECONCILE) so the blob for
+#      repo@sha is identical across people and across both engines and `--verify`
+#      works cross-language.
 # WHAT: Export a store -> canonical artifact bytes (+ checksum), import artifact
 #       -> a fresh local store, and compute/verify the checksum.
 # RESPONSIBILITIES:
-#   - Serialize a newline-delimited stream: manifest line, one compact sorted-key
-#     JSON object per chunk (sorted by file_path,start_line,chunk_id), graph line.
-#   - Encode each 256-d embedding as base64 of 256 little-endian IEEE-754 f64
-#     bytes (NOT decimals), so vectors are bit-identical regardless of float
-#     formatting.
-#   - checksum = lowercase-hex SHA-256 over the canonical bytes with the
-#     provenance keys (checksum/built_at/built_by) omitted from the manifest.
-#   - Import losslessly: recompute each chunk's language from its path, restore
-#     the import graph, rebuild the store with the hash embedder.
+#   - Serialize a UTF-8, LF-after-every-line stream: manifest line, one compact
+#     sorted-key JSON object per chunk (sorted by file_path,start_line,id), then a
+#     graph line `{"edges":[…],"nodes":[…]}`.
+#   - Encode each 256-d embedding as standard padded base64 of 256 little-endian
+#     IEEE-754 f64 bytes (NOT decimals).
+#   - checksum = lowercase-hex SHA-256 over the ENTIRE canonical stream built with
+#     the manifest's `checksum` value set to "" (then the real hex is written in).
+#   - Import losslessly: chunk fields incl. `language`, bit-exact vectors, the
+#     import graph, and whole-file token counts.
 #   - Deliberately NOT own git, the content address, or freshness policy.
 
 require "json"
@@ -30,16 +31,15 @@ module CCE
 
       module_function
 
-      # A stable pack_set_id: the sorted language-pack names of the registry,
-      # comma-joined. Both engines derive it from the same registry, so it is the
-      # same string (part of the manifest identity + checksum).
+      # A stable pack_set_id: the sorted, comma-joined lowercase language-pack
+      # names of the registry (part of the manifest identity + checksum).
       def pack_set_id(registry = CCE.registry)
-        registry.all.map(&:name).sort.join(",")
+        registry.all.map { |p| p.name.downcase }.sort.join(",")
       end
 
       # Read a store and produce the artifact for repo@sha.
       # @return [Hash] { bytes:, checksum:, manifest:, chunk_count: }
-      def export(store_path, repo_id:, sha:, built_at: nil, built_by: DEFAULT_BUILT_BY, registry: CCE.registry)
+      def export(store_path, repo_id:, sha:, registry: CCE.registry)
         store = CCE::Store.open(store_path)
         begin
           embedder = store.embedder_name
@@ -50,32 +50,31 @@ module CCE
           chunks = store.chunks
           vectors = store.vectors
           imports = store.file_imports
+          file_tokens = store.file_token_counts
         ensure
           store.close
         end
 
-        build(chunks: chunks, vectors: vectors, imports: imports, repo_id: repo_id,
-              sha: sha, built_at: built_at, built_by: built_by, registry: registry)
+        build(chunks: chunks, vectors: vectors, imports: imports, file_tokens: file_tokens,
+              repo_id: repo_id, sha: sha, registry: registry)
       end
 
       # Build the artifact from in-memory pieces (used by export and by tests).
-      def build(chunks:, vectors:, imports:, repo_id:, sha:, built_at: nil,
-                built_by: DEFAULT_BUILT_BY, registry: CCE.registry)
+      def build(chunks:, vectors:, imports:, file_tokens:, repo_id:, sha:, registry: CCE.registry)
+        files = chunks.map(&:file_path).uniq
         sorted = chunks.sort_by { |c| [c.file_path, c.start_line, c.chunk_id] }
         chunk_lines = sorted.map { |c| compact(chunk_object(c, vectors[c.chunk_id])) }
-        graph_line = compact(graph_object(imports))
+        graph_line = compact(graph_object(imports, files))
 
-        core = manifest_core(repo_id: repo_id, sha: sha, chunk_count: sorted.length, registry: registry)
-        canonical = join_lines([compact(core)] + chunk_lines + [graph_line])
-        checksum = Digest::SHA256.hexdigest(canonical)
+        # Hash the ENTIRE stream with checksum:"" (SPEC-SYNC-RECONCILE), then write
+        # the real hex into the checksum field of the emitted artifact.
+        manifest0 = manifest_hash(repo_id: repo_id, sha: sha, chunk_count: sorted.length,
+                                  file_tokens: file_tokens, checksum: "", registry: registry)
+        stream0 = join_lines([compact(manifest0)] + chunk_lines + [graph_line])
+        checksum = Digest::SHA256.hexdigest(stream0)
 
-        manifest = core.merge(
-          "built_at" => built_at.to_s,
-          "built_by" => built_by.to_s,
-          "checksum" => checksum
-        )
+        manifest = manifest0.merge("checksum" => checksum)
         bytes = join_lines([compact(manifest)] + chunk_lines + [graph_line])
-
         { bytes: bytes, checksum: checksum, manifest: manifest, chunk_count: sorted.length }
       end
 
@@ -92,15 +91,15 @@ module CCE
         { manifest: manifest, chunks: chunk_objs, graph: graph }
       end
 
-      # Recompute the checksum from artifact bytes (provenance keys omitted).
-      # Re-serializes each parsed object canonically, so a non-canonical or
-      # tampered stream is detected.
+      # Recompute the checksum from artifact bytes: set `checksum` to "" and hash
+      # the whole re-serialized canonical stream. Re-canonicalizing every object
+      # makes a non-canonical or tampered stream fail the check.
       def checksum_of(bytes)
         data = parse(bytes)
-        core = data[:manifest].reject { |k, _| PROVENANCE_KEYS.include?(k) }
+        manifest = data[:manifest].merge("checksum" => "")
         chunk_lines = data[:chunks].map { |c| compact(c) }
-        canonical = join_lines([compact(core)] + chunk_lines + [compact(data[:graph])])
-        Digest::SHA256.hexdigest(canonical)
+        stream = join_lines([compact(manifest)] + chunk_lines + [compact(data[:graph])])
+        Digest::SHA256.hexdigest(stream)
       end
 
       # True when the artifact's embedded checksum matches its content.
@@ -109,44 +108,43 @@ module CCE
       end
 
       # Import an artifact into a fresh store at `store_path`, losslessly.
-      # Language is recomputed from each chunk's path (it is a pure function of
-      # the path via the registry), so the artifact need not carry it.
       # @return [Hash] the parsed manifest
       def import(bytes, store_path, registry: CCE.registry)
         data = parse(bytes)
         records = data[:chunks].map do |c|
-          language = CCE::Chunker.language_for(c["file_path"], registry: registry) || "plaintext"
           chunk = CCE::Chunk.new(
             chunk_id: c["id"], file_path: c["file_path"],
             start_line: c["start_line"], end_line: c["end_line"],
-            chunk_type: c["chunk_type"], kind: c["kind"], language: language,
+            chunk_type: c["chunk_type"], kind: c["kind"], language: c["language"],
             content: c["content"], token_count: c["token_count"]
           )
           { chunk: chunk, vector: decode_embedding(c["embedding"]) }
         end
 
-        imports = data[:graph].each_with_object({}) { |(fp, mods), h| h[fp] = Array(mods) }
         CCE::Store.create(store_path) do |s|
-          s.write(records: records, file_imports: imports, embedder: SHAREABLE_EMBEDDER)
+          s.write(records: records, file_imports: imports_from_graph(data[:graph]),
+                  file_tokens: data[:manifest]["file_tokens"] || {}, embedder: SHAREABLE_EMBEDDER)
         end
         data[:manifest]
       end
 
       # ---- serialization helpers ----------------------------------------------
 
-      # The deterministic identity fields that are checksummed (SPEC-SYNC §2).
-      def manifest_core(repo_id:, sha:, chunk_count:, registry: CCE.registry)
+      # The full manifest object (SPEC-SYNC-RECONCILE): exactly these keys.
+      def manifest_hash(repo_id:, sha:, chunk_count:, file_tokens:, checksum:, registry: CCE.registry)
         {
           "cce_version" => Sync.cce_version,
+          "checksum" => checksum,
           "chunk_count" => chunk_count,
           "embedder" => SHAREABLE_EMBEDDER,
+          "file_tokens" => file_tokens,
           "pack_set_id" => pack_set_id(registry),
           "repo_id" => repo_id,
           "sha" => sha
         }
       end
 
-      # One chunk's interchange object (SPEC-SYNC §2). Key name is `id` per spec.
+      # One chunk's interchange object (SPEC-SYNC-RECONCILE). Key name is `id`.
       def chunk_object(chunk, vector)
         {
           "chunk_type" => chunk.chunk_type,
@@ -156,23 +154,53 @@ module CCE
           "file_path" => chunk.file_path,
           "id" => chunk.chunk_id,
           "kind" => chunk.kind,
+          "language" => chunk.language,
           "start_line" => chunk.start_line,
           "token_count" => chunk.token_count
         }
       end
 
-      # The import graph: file_path -> module names, only for files with imports
-      # (a file with no imports contributes no edge and no store row).
-      def graph_object(imports)
-        imports.each_with_object({}) do |(fp, mods), h|
-          list = Array(mods)
-          h[fp] = list unless list.empty?
+      # The import graph as `{"edges":[…],"nodes":[…]}`: nodes are the corpus
+      # files (one `{"id": path}` each, sorted by id); edges are the resolved
+      # file→file import relations `{"source","target","type":"import"}`, sorted
+      # by (source, target, type). Resolution mirrors GraphStore (SPEC §6.7).
+      def graph_object(imports, files)
+        corpus = files.uniq.sort
+        by_stem = {}
+        corpus.each { |f| (by_stem[File.basename(f, File.extname(f))] ||= []) << f }
+
+        edges = []
+        imports.each do |from, mods|
+          Array(mods).each do |mod|
+            target = resolve_module(mod, by_stem, corpus)
+            next if target.nil? || target == from
+
+            edges << { "source" => from, "target" => target, "type" => "import" }
+          end
         end
+        edges = edges.uniq.sort_by { |e| [e["source"], e["target"], e["type"]] }
+        { "edges" => edges, "nodes" => corpus.map { |f| { "id" => f } } }
       end
 
-      # base64 of 256 little-endian IEEE-754 f64 values (SPEC-SYNC §2). `m0`
-      # packs strict base64 with no line breaks (== Base64.strict_encode64) and
-      # needs no non-default-gem dependency.
+      # Reconstruct file_imports from the graph edges: each edge source→target
+      # becomes an import of the target's stem, so the rebuilt store's GraphStore
+      # reproduces the same adjacency (and identical graph-enabled search).
+      def imports_from_graph(graph)
+        out = Hash.new { |h, k| h[k] = [] }
+        Array(graph["edges"]).each do |e|
+          out[e["source"]] << File.basename(e["target"], File.extname(e["target"]))
+        end
+        out.transform_values(&:uniq)
+      end
+
+      def resolve_module(mod, by_stem, files)
+        return by_stem[mod].min if by_stem.key?(mod) && !by_stem[mod].empty?
+
+        files.select { |f| f.end_with?("#{mod}.py") || f.end_with?("#{mod}.js") }.min
+      end
+
+      # standard padded base64 (no newlines) of 256 little-endian IEEE-754 f64
+      # values (SPEC-SYNC-RECONCILE). `m0` == RFC 4648 base64, padded, no breaks.
       def encode_embedding(vector)
         vec = Array(vector)
         raise Error, "embedding must be #{EMBED_DIM}-d, got #{vec.length}" unless vec.length == EMBED_DIM
@@ -206,7 +234,8 @@ module CCE
         end
       end
 
-      # Join canonical lines into a UTF-8, LF-terminated stream.
+      # Join canonical lines into a UTF-8 stream with LF after every line
+      # (including the last).
       def join_lines(lines)
         lines.map { |l| "#{l}\n" }.join
       end

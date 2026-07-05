@@ -22,18 +22,6 @@ module CCE
     # caches (SPEC-SYNC §1). Ollama/semantic indexes are local-only.
     SHAREABLE_EMBEDDER = "hash"
 
-    # Manifest keys that are provenance/derived and therefore EXCLUDED from the
-    # checksummed canonical bytes (SPEC-SYNC §2). `built_at`/`built_by` differ
-    # between builders (CI vs a teammate) and `checksum` is the digest itself; if
-    # any of them entered the digest the "byte-identical across people and across
-    # both engines" guarantee would be false. The checksum therefore covers only
-    # the deterministic identity + content.
-    PROVENANCE_KEYS = %w[built_at built_by checksum].freeze
-
-    # Default provenance for a locally built artifact. `built_by` is a fixed
-    # engine tag (NOT a person) so it never leaks identity into a shared cache.
-    DEFAULT_BUILT_BY = "cce-ruby"
-
     # Where GitRemote keeps its working clones (SPEC-SYNC §4). Overridable so
     # tests are fully hermetic and never touch a developer's ~/.cce.
     def self.default_clone_base(home: Dir.home)
