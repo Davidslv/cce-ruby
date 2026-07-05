@@ -168,6 +168,54 @@ bundle exec bin/cce conformance test/fixture/samples -o conformance.json
 | `search <query> --workspace [<dir>] [--package a,b] […]` | Federated search over the members' union (v2.2). |
 | `stats --workspace [<dir>]` | Per-member metrics + totals + edges (v2.2). |
 | `dashboard --workspace [<dir>]` | Federated roll-up dashboard with a per-package breakdown (v2.2). |
+| `init [<dir>] [--agent claude] [--remote <sync-url>] [--force]` | Ensure an index + wire the editor's MCP config (v2.4). |
+| `mcp [--dir DIR \| --store PATH] [--workspace]` | Serve the read-only MCP server over stdio (JSON-RPC 2.0) (v2.4). |
+
+## Use it with Claude Code (MCP)
+
+CCE ships an **MCP server** so an agent (Claude Code, Cursor, …) calls CCE as a
+**native tool it auto-invokes** — you stop hoping it shells out to `cce search`.
+This closes the one gap between clean-room CCE and the original: agent
+integration. Full guide: [`docs/mcp.md`](docs/mcp.md).
+
+```sh
+# 1. In your project root, wire everything up (idempotent):
+bundle exec bin/cce init .
+#   → ensures an index, writes .mcp.json + a CLAUDE.md block, prints next steps
+
+# 2. Restart Claude Code so it loads the `cce` MCP server (per .mcp.json).
+
+# 3. Ask a question about the codebase — e.g. "where is password hashing?".
+#    The agent calls the context_search tool instead of grepping.
+
+# 4. Confirm it was used:
+bundle exec bin/cce dashboard --dir .
+#   → the dashboard shows the agent's queries + token savings
+```
+
+`cce init` writes this `.mcp.json` (a workspace gets `["mcp", "--workspace"]`):
+
+```json
+{ "mcpServers": { "cce": { "command": "cce", "args": ["mcp", "--dir", "."] } } }
+```
+
+**Three tools** (identical names/schemas/output in cce-ruby and cce-rust):
+
+| Tool | Purpose |
+|---|---|
+| `context_search` | PREFERRED over Read/Grep. `{ query, top_k=8, package?, no_graph?, max_tokens? }` → ranked chunks + a `query_id`. Logs a `search` event to `.cce/metrics.jsonl`. |
+| `index_status` | `{}` → chunk/file counts, per-language/kind, store path, freshness (and sync source/`sha`/behind-remote). |
+| `record_feedback` | `{ query_id, helpful, note? }` → appends a `feedback` event for the dashboard's quality signal. |
+
+The server is **read-only** and **offline**; a missing index yields a friendly
+*"run `cce index`"* message, not a crash. **How do I know the agent used it?**
+Every `context_search` is (a) a visible tool call in the editor's log and (b) a
+`search` event in `.cce/metrics.jsonl` that `cce dashboard` renders.
+
+**Fresh, team-shared context (optional):** `cce init --remote <sync-url>` pulls a
+CI-built index via [CCE Sync](#cce-sync--a-distributed-offline-first-cache) and
+turns on `sync.auto_pull`, so `cce mcp` warms the local index on startup
+(offline-safe). MCP works fully with no Sync configured — it is a soft dependency.
 
 ## Secret & sensitive-file protection
 
@@ -372,9 +420,11 @@ coverage breakdown.
 | [`SPEC-V2.1.md`](SPEC-V2.1.md) | The v2.1 evolution spec: secret & sensitive-file protection. |
 | [`SPEC-V2.2.md`](SPEC-V2.2.md) | The v2.2 evolution spec: workspaces / multi-codebase ecosystems. |
 | [`SPEC-SYNC.md`](SPEC-SYNC.md) | The v2.3 design spec: CCE Sync — offline-first, content-addressed cache over a git remote. |
+| [`SPEC-MCP.md`](SPEC-MCP.md) | The v2.4 design spec: CCE MCP — an MCP server + `cce init` so an agent uses CCE as a native tool. |
 | [`docs/workspace.md`](docs/workspace.md) | The workspace model, manifest format, detection rules, federation semantics, and strain points. |
 | [`docs/sync.md`](docs/sync.md) | CCE Sync: the model, byte-exact artifact format, content address, git/LFS backend, permissions, CI recipe, troubleshooting. |
-| [`docs/VERIFIED.md`](docs/VERIFIED.md) | The verified, cold-start end-to-end sync walkthrough transcript (SPEC-SYNC §10.5 gate). |
+| [`docs/mcp.md`](docs/mcp.md) | CCE MCP: `cce init`, the `cce mcp` server, the three tools, how to confirm agent use, and sync freshness. |
+| [`docs/VERIFIED.md`](docs/VERIFIED.md) | The verified, cold-start end-to-end sync + MCP walkthrough transcripts. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Newcomer path: install → first successful index + search. |
 | [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, switch to Ollama. |
 | [`docs/adding-a-language.md`](docs/adding-a-language.md) | Step-by-step guide to adding a language pack, with a worked example. |
@@ -424,6 +474,8 @@ lib/cce/                # implementation, one concern per file
   sync.rb               # sync namespace + constants + require point (v2.3)
   sync/                 # artifact, content_address, git, git_remote, config,
                         #   commands — offline-first content-addressed cache (v2.3)
+  mcp.rb                # MCP namespace + pinned protocol version + require point (v2.4)
+  mcp/                  # context, tools, server (JSON-RPC 2.0 over stdio), init (v2.4)
   cli.rb                # command-line dispatch
 test/                   # tests, written first
 test/fixture/samples/   # the seven byte-exact sample fixtures (pack self-tests + conformance corpus)

@@ -19,6 +19,7 @@
 - [SPEC.md](SPEC.md): The authoritative specification — the source of truth for every behaviour.
 - [SPEC-V2.md](SPEC-V2.md): The v2.0 evolution spec — pluggable language packs, `kind`, validators, conformance v2.
 - [CCE Sync](docs/sync.md): v2.3 — offline-first, content-addressed cache over a git remote; byte-exact interchange artifact, content address, LFS backend, CI recipe, troubleshooting.
+- [CCE MCP](docs/mcp.md): v2.4 — an MCP server (`cce mcp`, JSON-RPC 2.0 over stdio) + `cce init` so an agent (Claude Code) uses CCE as a native tool; three tools (`context_search`, `index_status`, `record_feedback`), dashboard proof-of-use, sync freshness.
 - [Getting started](docs/getting-started.md): Install → first successful index and search, self-serve.
 - [How-to recipes](docs/how-to.md): Task recipes — index, search, packs, benchmark, conformance, Ollama.
 - [Adding a language](docs/adding-a-language.md): Step-by-step guide to adding a language pack, with a worked example.
@@ -39,7 +40,11 @@
 ## Key source files
 
 - [bin/cce](bin/cce): The executable entry point; delegates to CCE::CLI.
-- [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/packs/conformance).
+- [lib/cce/cli.rb](lib/cce/cli.rb): Argument parsing and command dispatch (index/search/stats/bench/packs/conformance/workspace/sync/mcp/init).
+- [lib/cce/mcp/server.rb](lib/cce/mcp/server.rb): The v2.4 hand-rolled JSON-RPC 2.0 over-stdio MCP server (initialize/tools/list/tools/call/ping); pinned protocol version.
+- [lib/cce/mcp/tools.rb](lib/cce/mcp/tools.rb): The three MCP tools with the exact cross-language schemas (`context_search`, `index_status`, `record_feedback`).
+- [lib/cce/mcp/context.rb](lib/cce/mcp/context.rb): Read-only store resolution, metrics recording, index_status, and the best-effort sync auto-pull warm-up (soft dependency).
+- [lib/cce/mcp/init.rb](lib/cce/mcp/init.rb): `cce init` — ensure an index + idempotently merge `.mcp.json` and a bounded `CLAUDE.md` block.
 - [lib/cce/retriever.rb](lib/cce/retriever.rb): The hybrid retrieval pipeline (intent → RRF → confidence → penalty → diversity → graph).
 - [lib/cce/chunker.rb](lib/cce/chunker.rb): Registry-driven AST chunking, import extraction, per-chunk `kind`, deterministic chunk id — language-blind (names no language).
 - [lib/cce/packs/](lib/cce/packs/): One `LanguagePack` per language (python, javascript, ruby, rust, typescript, c); each declares its node types, import rule, and self-test sample.
@@ -56,4 +61,4 @@ Note: the metrics/dashboard subsystem (`lib/cce/metrics*.rb`, `lib/cce/dashboard
 
 - [License (MIT)](LICENSE): MIT © 2026 David Silva.
 - [Security policy](SECURITY.md): Threat model (untrusted parsed input; secret-safe-by-default indexing — sensitive files skipped + inline secrets redacted, `--allow-secrets` opts out; localhost-only opt-in network; loopback-only read-only self-contained dashboard) and private reporting.
-- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.1.0 secret & sensitive-file protection (secure-by-default), 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.
+- [Changelog](CHANGELOG.md): Keep a Changelog format; 2.4.0 CCE MCP (agent tool + `cce init`), 2.3.0 CCE Sync (distributed cache), 2.2.0 workspaces, 2.1.0 secret & sensitive-file protection (secure-by-default), 2.0.0 language packs + `kind` (breaking), 1.1.0 dashboard/observability, 1.0.0 initial release.

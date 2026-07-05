@@ -25,16 +25,18 @@ require_relative "dashboard_app"
 require_relative "dashboard_server"
 require_relative "workspace"
 require_relative "sync"
+require_relative "mcp"
 
 module CCE
   class CLI
-    def self.run(argv, out: $stdout, err: $stderr)
-      new(out, err).run(argv)
+    def self.run(argv, out: $stdout, err: $stderr, inp: $stdin)
+      new(out, err, inp).run(argv)
     end
 
-    def initialize(out, err)
+    def initialize(out, err, inp = $stdin)
       @out = out
       @err = err
+      @inp = inp
     end
 
     def run(argv)
@@ -50,12 +52,17 @@ module CCE
       when "dashboard"   then cmd_dashboard(argv)
       when "workspace"   then cmd_workspace(argv)
       when "sync"        then cmd_sync(argv)
+      when "mcp"         then cmd_mcp(argv)
+      when "init"        then cmd_init(argv)
       when "help", "--help", "-h", nil then print_help; 0
       else
         @err.puts "unknown command: #{cmd}"
         print_help
         2
       end
+    rescue MCP::Error => e
+      @err.puts "error: #{e.message}"
+      1
     rescue Workspace::Error => e
       @err.puts "error: #{e.message}"
       1
@@ -776,6 +783,72 @@ module CCE
       0
     end
 
+    # ---- mcp (SPEC-MCP §The server) ------------------------------------------
+
+    # Serve the read-only MCP server over stdio (JSON-RPC 2.0). Resolves the store
+    # like `search` (--dir / --store / cwd, --workspace), best-effort warms the
+    # index from CCE Sync on startup (offline-safe), then serves until EOF.
+    def cmd_mcp(argv)
+      store = nil
+      dir = nil
+      workspace = false
+      parser = OptionParser.new do |o|
+        o.on("--store PATH") { |v| store = v }
+        o.on("--dir PATH") { |v| dir = v }
+        o.on("--workspace") { workspace = true }
+      end
+      parser.parse(argv)
+
+      context = MCP::Context.new(dir: dir, store: store, workspace: workspace)
+      context.warm_up!
+      MCP::Server.new(context: context, input: @inp, output: @out).run
+      0
+    end
+
+    # ---- init (SPEC-MCP §cce init) -------------------------------------------
+
+    # Plug-and-play editor wiring: ensure an index, write/merge .mcp.json + a
+    # bounded CLAUDE.md block, print next steps. Idempotent.
+    def cmd_init(argv)
+      agent = "claude"
+      remote = nil
+      force = false
+      parser = OptionParser.new do |o|
+        o.on("--agent NAME") { |v| agent = v }
+        o.on("--remote URL") { |v| remote = v }
+        o.on("--force") { force = true }
+      end
+      rest = parser.parse(argv)
+      dir = rest.shift || "."
+      return usage_error("no such directory: #{dir}") unless File.directory?(dir)
+
+      res = MCP::Init.run(dir: dir, agent: agent, remote: remote, force: force)
+      print_init(res)
+      0
+    end
+
+    def print_init(res)
+      @out.puts "CCE init — #{res[:workspace] ? 'workspace' : 'project'} at #{res[:dir]}"
+      @out.puts "  index:    #{describe_index(res[:index])}"
+      @out.puts "  .mcp.json: #{res[:mcp_path]}"
+      @out.puts "  CLAUDE.md: #{res[:claude_path]}"
+      @out.puts ""
+      @out.puts "Next steps:"
+      @out.puts "  1. Restart your editor (Claude Code) so it loads the `cce` MCP server."
+      @out.puts "  2. Ask a question about this codebase — the agent will call context_search."
+      @out.puts "  3. Confirm it was used: `cce dashboard#{res[:workspace] ? ' --workspace' : ''}` shows the agent's queries."
+      0
+    end
+
+    def describe_index(index)
+      case index[:mode]
+      when :sync then "pulled #{index[:sha] ? index[:sha][0, 12] : '(latest)'} via sync (#{index[:chunk_count]} chunks)"
+      when :sync_failed then "sync unreachable (#{index[:error]}); built local index"
+      when :workspace then index[:reused] ? "workspace index reused" : "workspace indexed (#{index[:members]} members, #{index[:chunks]} chunks)"
+      else index[:reused] ? "reused local index" : "indexed #{index[:files]} files (#{index[:chunks]} chunks)"
+      end
+    end
+
     def usage_error(msg)
       @err.puts "error: #{msg}"
       2
@@ -794,6 +867,10 @@ module CCE
           cce conformance <fixture-dir> [-o conformance.json]
           cce feedback <query-id> --helpful|--not-helpful [--note "..."] [--dir DIR | --store PATH]
           cce dashboard [--dir DIR | --store PATH] [--port N] [--metrics PATH] [--no-open]
+
+        Use it with Claude Code (MCP — agents call CCE as a native tool):
+          cce init [<dir>] [--agent claude] [--remote <sync-url>] [--force]
+          cce mcp  [--dir DIR | --store PATH] [--workspace]   (stdio JSON-RPC MCP server)
 
         Workspaces (multi-codebase ecosystems):
           cce workspace init [<dir>] [--force]   detect members -> .cce/workspace.yml

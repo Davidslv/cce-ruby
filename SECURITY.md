@@ -7,9 +7,9 @@ provided for the current minor series only.
 
 | Version | Supported |
 |---|---|
+| 2.4.x   | ✅ |
 | 2.3.x   | ✅ |
-| 2.2.x   | ✅ |
-| < 2.2   | ❌ |
+| < 2.3   | ❌ |
 
 ## Threat model
 
@@ -87,6 +87,30 @@ matters more than boilerplate, so here is the real picture.
   `<store-dir>/metrics.jsonl`. Writing is fail-open (a failure never breaks the
   command and never raises), and it records only what you searched/indexed and
   your feedback — it is not transmitted anywhere.
+
+### MCP server (v2.4)
+
+`cce mcp` adds no new trust boundary and no new network path:
+
+- **Read-only.** The server loads the index and answers queries; it never mutates
+  source, the store, or any file. Its tools are `context_search`, `index_status`,
+  and `record_feedback` — of these only `record_feedback` writes, and only an
+  append to the local `metrics.jsonl` (same fail-open path as the CLI).
+- **Offline over stdio.** The transport is JSON-RPC 2.0 on stdin/stdout with the
+  editor that launched it — there is **no listening socket** and no outbound
+  request (the sole optional network path remains an Ollama-embedded index, opt-in
+  and unchanged). It makes no request to any external host.
+- **Secret-safe by construction.** The tools only ever return what is already in
+  the store, which was **redacted at index time** (Layer 1 + Layer 2 above). There
+  is nothing new to scrub — the server cannot surface a secret the index does not
+  already (by policy) contain.
+- **Sync warm-up is best-effort and offline-safe.** When configured, `cce mcp` may
+  `sync pull --latest` on startup over the same opt-in, git-transported CCE Sync
+  path (below); it never blocks, never errors, and is absent unless you configured
+  a remote and `sync.auto_pull`.
+- **`cce init` writes only local, non-secret config.** `.mcp.json` and the bounded
+  `CLAUDE.md` block hold a command invocation and prose guidance — no credentials —
+  and are safe to commit and review.
 
 ### Workspace mode (v2.2)
 

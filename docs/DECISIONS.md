@@ -459,3 +459,54 @@ The shared golden is `test/fixture/samples` built with `repo_id="cce/demo"`,
 `sha="0"×40` → checksum
 `581cbd0ff682a38d7d1250f3eec44f4ce456bdd660d4cb29aaaadd9e95072f48`; the golden test
 also writes `/tmp/cce_artifact_ruby.cce` for a byte-for-byte diff against Rust.
+
+## CCE MCP (v2.4, SPEC-MCP)
+
+Decisions taken building the MCP server + `cce init`. All additive: the CLI and
+single-repo `conformance.json` are unchanged, and the engine stays offline-first.
+
+**D-MCP-1 — Hand-rolled JSON-RPC 2.0 over stdio, no MCP gem.** *Ambiguity:*
+SPEC-MCP allows either an MCP gem (`mcp`, `fast-mcp`) or a hand-rolled transport.
+*Decision:* hand-roll line-delimited JSON-RPC 2.0 (`CCE::MCP::Server`). The stdio
+transport is one JSON message per line — small enough that a dependency buys
+little, and avoiding it keeps the engine offline-first, deterministic, and the
+tests fully hermetic (pipe an input IO, assert an output IO). It also keeps the
+Ruby wire behaviour under our control so it matches the Rust sibling exactly. The
+protocol revision is pinned to `2025-06-18` (`CCE::MCP::PROTOCOL_VERSION`).
+
+**D-MCP-2 — The sync FORMAT-compatibility window is decoupled from `CCE::VERSION`
+and pinned at `2.3`.** *Ambiguity:* SPEC-SYNC §3 says the content-address
+`<cce_ver>` and the manifest `cce_version` are "the cce version at major.minor",
+which previously derived from `CCE::VERSION`. Bumping to 2.4 would roll the window
+to `2.4`, invalidating every existing 2.3 cache and changing the cross-language
+golden checksum — which a guard test explicitly says to change only after
+re-syncing with Rust. *Decision:* the field is a **format** version, not a software
+version. CCE MCP does not change the interchange artifact format, so the window
+stays `2.3` via `CCE::Sync::SYNC_FORMAT_VERSION`. It rolls only when the artifact
+format actually changes. This keeps existing caches valid and the golden unchanged,
+and is the correct meaning of "format-compatibility window".
+
+**D-MCP-3 — `context_search` records the same `search` event as the CLI.** So a
+tool call and a `cce search` are indistinguishable to the dashboard, making "the
+agent used it" observable via `cce dashboard` (SPEC-MCP §Observability). The event
+is written beside the store (`<store-dir>/metrics.jsonl`) in single-repo mode and
+under `<root>/.cce/metrics.jsonl` for a workspace. Metrics use the injected
+clock/id source, so the returned `query_id` is deterministic in tests.
+
+**D-MCP-4 — A missing index is a friendly tool message, never an error.**
+`context_search` over an un-built index returns a "run `cce index`" text result
+(`isError:false`) and `index_status` reports "not indexed", so the server is useful
+the moment an editor connects, before anything is indexed (SPEC-MCP §2).
+
+**D-MCP-5 — `cce init` is idempotent by construction.** `.mcp.json` is merged (the
+`cce` server entry is replaced, other servers preserved); the `CLAUDE.md` block is
+bounded by stable `<!-- BEGIN/END CCE MCP -->` markers and replaced in place when
+present, appended otherwise. Re-running never duplicates either. Without `--force`
+an existing index is reused rather than rebuilt.
+
+**D-MCP-6 — `cce init --remote` warms via sync pull, not a local index; unreachable
+falls back to local.** With a remote, init writes `sync.auto_pull: true` and pulls
+the CI-built index (the pull lazily clones — no separate `sync init` step). If the
+remote is unreachable, init falls back to a local `cce index` so it never leaves the
+project un-indexed (offline-first). The soft dependency is gated on
+config-configured + `auto_pull`, so MCP ships and runs with no Sync at all.

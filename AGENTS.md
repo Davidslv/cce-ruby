@@ -89,11 +89,20 @@ This is the rule that overrides convenience:
 - `lib/cce/metrics*.rb`, `lib/cce/dashboard*.rb` — the v1.1 metrics/observability
   subsystem (event log, recorder, pure aggregator, and the loopback dashboard
   app/page/server). See [`docs/dashboard.md`](docs/dashboard.md).
+- `lib/cce/sync*.rb`, `lib/cce/sync/` — the v2.3 offline-first, content-addressed
+  sync cache. See [`docs/sync.md`](docs/sync.md).
+- `lib/cce/mcp.rb`, `lib/cce/mcp/` — the v2.4 MCP subsystem: `server.rb`
+  (JSON-RPC 2.0 over stdio, pinned protocol version), `tools.rb` (the three
+  cross-language tools), `context.rb` (read-only store resolution + metrics + sync
+  warm-up), `init.rb` (`cce init`). See [`docs/mcp.md`](docs/mcp.md). Keep the tool
+  names/schemas/output **identical to the Rust sibling** — that is the contract.
 - `docs/` — [`architecture.md`](docs/architecture.md), [`dashboard.md`](docs/dashboard.md),
   [`DECISIONS.md`](docs/DECISIONS.md), [`TDD.md`](docs/TDD.md), [`BENCHMARKS.md`](docs/BENCHMARKS.md),
-  [`getting-started.md`](docs/getting-started.md), [`how-to.md`](docs/how-to.md).
+  [`getting-started.md`](docs/getting-started.md), [`how-to.md`](docs/how-to.md),
+  [`sync.md`](docs/sync.md), [`mcp.md`](docs/mcp.md), [`VERIFIED.md`](docs/VERIFIED.md).
 - `SPEC.md` — the authoritative specification; `DASHBOARD-SPEC.md` — the v1.1
-  dashboard/observability addendum; `SPEC-V2.md` — the v2.0 language-pack evolution.
+  dashboard/observability addendum; `SPEC-V2.md` — the v2.0 language-pack evolution;
+  `SPEC-SYNC.md` — the v2.3 sync design; `SPEC-MCP.md` — the v2.4 MCP design.
 
 ## Commit and PR conventions
 
