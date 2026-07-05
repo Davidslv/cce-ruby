@@ -41,20 +41,24 @@ class WorkspaceDashboardTest < Minitest::Test
   def test_by_package_breakdown
     agg = CCE::Workspace::Dashboard.aggregate(member_events, now: NOW, price: 3.0)
     by = agg[:by_package]
-    assert_equal %w[app billing], by.keys
-    assert_equal 2, by["app"][:searches]
-    assert_equal 400, by["app"][:tokens_saved]
-    assert_in_delta 0.6, by["app"][:mean_savings_ratio], 1e-9
-    assert_equal 1, by["billing"][:searches]
-    assert_equal 200, by["billing"][:tokens_saved]
+    # Canonical cross-engine shape: an ARRAY of { package, … }, sorted by package.
+    assert_kind_of Array, by
+    assert_equal %w[app billing], by.map { |p| p[:package] }
+    app = by.find { |p| p[:package] == "app" }
+    billing = by.find { |p| p[:package] == "billing" }
+    assert_equal 2, app[:searches]
+    assert_equal 400, app[:tokens_saved]
+    assert_in_delta 0.6, app[:mean_savings_ratio], 1e-9
+    assert_equal 1, billing[:searches]
+    assert_equal 200, billing[:tokens_saved]
     # v2.4: per-member retrieval quality (mean rank-1 score over non-empty searches).
-    assert_in_delta 0.9, by["app"][:mean_top_score], 1e-9
-    assert_in_delta 0.9, by["billing"][:mean_top_score], 1e-9
+    assert_in_delta 0.9, app[:mean_top_score], 1e-9
+    assert_in_delta 0.9, billing[:mean_top_score], 1e-9
   end
 
   def test_by_package_sum_equals_total
     agg = CCE::Workspace::Dashboard.aggregate(member_events, now: NOW, price: 3.0)
-    total = agg[:by_package].values.sum { |v| v[:tokens_saved] }
+    total = agg[:by_package].sum { |p| p[:tokens_saved] }
     assert_equal agg[:totals][:tokens_saved], total
   end
 
@@ -73,7 +77,8 @@ class WorkspaceDashboardTest < Minitest::Test
       )
       metrics = JSON.parse(app.call("/api/metrics").body)
       assert_equal 2, metrics["totals"]["searches"]
-      assert metrics["by_package"].key?("app")
+      assert_kind_of Array, metrics["by_package"]
+      assert(metrics["by_package"].any? { |p| p["package"] == "app" })
 
       health = JSON.parse(app.call("/api/health").body)
       assert_equal "ok", health["status"]

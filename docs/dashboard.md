@@ -153,42 +153,51 @@ workspace `by_package`). Every one degrades gracefully on old logs, and — like
 rest of the aggregate — is computed **offline from the log** (no remote contact),
 so the dashboard stays fully offline.
 
+These keys are the **single cross-engine canonical contract** — cce-ruby and
+cce-rust emit byte-identical shapes.
+
 ```json
 {
+  "totals": { "…": "…", "mean_top_score": 0.633333 },
   "by_source": {
-    "cli": {"searches": 21, "tokens_saved": 105274, "mean_savings_ratio": 0.585000},
-    "mcp": {"searches": 18, "tokens_saved":  98901, "mean_savings_ratio": 0.601000}
+    "cli": {"searches": 21, "tokens_saved": 105274, "mean_savings_ratio": 0.585000, "mean_top_score": 0.712000},
+    "mcp": {"searches": 18, "tokens_saved":  98901, "mean_savings_ratio": 0.601000, "mean_top_score": 0.704000}
   },
-  "freshness": {
-    "indexes": 1, "last_indexed_ts": "2026-06-25T09:00:00Z",
-    "sha": "9f3c1ab77e20d41c", "source": "sync-pull"
+  "index_freshness": {
+    "indexes": 1, "source": "sync-pull",
+    "sha": "9f3c1ab77e20d41c", "indexed_ts": "2026-06-25T09:00:00Z"
   },
-  "secret_safety": { "sensitive_skipped": 4 }
+  "secret_safety": { "sensitive_skipped": 4, "index_runs": 1 }
 }
 ```
 
+- **`totals.mean_top_score`** — mean rank-1 score over the log's non-empty searches
+  (the unwindowed twin of north-star B).
 - **`by_source` — agent vs human.** Every search bucketed by `source`
   (`mcp` = agent/`context_search`, everything else = `cli`), so you can see how
   much your agent leans on CCE vs your own CLI use. Pre-v2.4 searches bucket as
-  `cli`.
-- **`freshness` — index freshness / sync status.** Derived from the most-recent
-  `index` event: the indexed `sha`, `source` (local vs `sync-pull`),
-  `last_indexed_ts`, and total `indexes`. **"Behind remote" is deliberately not
+  `cli`. Each bucket carries `searches`, `tokens_saved`, `mean_savings_ratio`, and
+  `mean_top_score`.
+- **`index_freshness` — index freshness / sync status.** Derived from the
+  most-recent `index` event: `indexes` (run count), `source` (local vs
+  `sync-pull`), `sha`, and `indexed_ts`. **"Behind remote" is deliberately not
   here** — it needs a network round-trip, so it lives in `cce sync status` (an
   explicit network action) and the MCP `index_status` tool, keeping the served
   dashboard offline.
 - **`secret_safety` — redaction reassurance.** `sensitive_skipped` summed across
-  index events: the count of files the secret-safe walker refused to read.
+  index events (files the secret-safe walker refused to read), plus `index_runs`
+  (how many index events contributed).
 
 **Workspace `by_package`** (from `cce dashboard --workspace`) rolls the ecosystem
-up per member and now includes per-member retrieval quality:
+up per member as a **sorted array of objects** (each with a `package` field) that
+now includes per-member retrieval quality:
 
 ```json
-"by_package": {
-  "app":     {"searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.869194},
-  "billing": {"searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.745000},
-  "web":     {"searches": 1, "tokens_saved": 2, "mean_savings_ratio": 0.04878, "mean_top_score": 0.864528}
-}
+"by_package": [
+  {"package": "app",     "searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.869194},
+  {"package": "billing", "searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.745000},
+  {"package": "web",     "searches": 1, "tokens_saved": 2, "mean_savings_ratio": 0.04878, "mean_top_score": 0.864528}
+]
 ```
 
 The self-contained page renders these as an **Agent vs human usage** panel, an

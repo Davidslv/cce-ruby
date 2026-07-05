@@ -528,7 +528,7 @@ invariants. **Decisions:**
   optional `sha`. Old logs parse unchanged and the §4.1 aggregator anchor is
   unaffected (it asserts field-by-field, not whole-hash equality).
 - **Freshness is computed purely from index events, offline.** The `/api/metrics`
-  `freshness` section reads the most-recent `index` event's `sha`/`source`. The
+  `index_freshness` section reads the most-recent `index` event's `sha`/`source`. The
   "behind remote" question needs a network round-trip, so it is **deliberately
   excluded** from the dashboard and lives only in `cce sync status` and the MCP
   `index_status` tool. This keeps the served dashboard fully offline — a hard

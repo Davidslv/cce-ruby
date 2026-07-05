@@ -26,16 +26,20 @@ still parse: every new event field is optional and degrades gracefully.
   installed by `cce sync pull`), and `sensitive_skipped` (files the secret-safe
   walker refused to read). Every field is optional/defaulted so pre-v2.4 logs parse
   unchanged and absent fields degrade gracefully in the aggregator.
-- **Dashboard panels (`/api/metrics` gains three sections; workspace `by_package`
-  gains one field).**
+- **Dashboard panels — the single cross-engine canonical `/api/metrics` contract.**
+  - `totals.mean_top_score` — mean rank-1 score over the log's non-empty searches.
   - `by_source` — agent-vs-human usage: `{ cli:{searches,tokens_saved,
-    mean_savings_ratio}, mcp:{…} }`. Pre-v2.4 searches bucket as `cli`.
-  - `freshness` — index freshness / sync status computed **offline** from index
-    events: `{ indexes, last_indexed_ts, sha, source }`. "Behind remote" stays in
-    `cce sync status` (an explicit network action), keeping the dashboard offline.
-  - `secret_safety` — `{ sensitive_skipped }`, summed across index events.
-  - Workspace `by_package[member]` gains `mean_top_score` (per-member retrieval
-    quality) alongside `searches`, `tokens_saved`, `mean_savings_ratio`.
+    mean_savings_ratio,mean_top_score}, mcp:{…} }`. Searches with `source=="mcp"`
+    count as agent; everything else (incl. pre-v2.4/absent) as `cli`.
+  - `index_freshness` — index freshness / sync status computed **offline** from
+    index events: `{ indexes, source, sha, indexed_ts }`. `remote_latest`/
+    `behind_remote` stay in `cce sync status` and the MCP `index_status` tool (an
+    explicit network action), keeping the dashboard offline.
+  - `secret_safety` — `{ sensitive_skipped, index_runs }`, summed/counted across
+    index events.
+  - Workspace `by_package` — a sorted **array** of `{ package, searches,
+    tokens_saved, mean_savings_ratio, mean_top_score }` (per-member retrieval
+    quality added).
   - The self-contained dashboard page renders all four (agent-vs-human, index
     freshness · sync · secret-safety, per-member breakdown), staying loopback-only,
     read-only, and self-contained.

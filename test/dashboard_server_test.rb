@@ -56,8 +56,9 @@ class DashboardServerTest < Minitest::Test
     # v2.4 refreshed panels are present in the served shape and offline-safe.
     assert_equal 4, body["by_source"]["cli"]["searches"]
     assert_equal 0, body["by_source"]["mcp"]["searches"]
-    assert_equal 1, body["freshness"]["indexes"]
+    assert_equal 1, body["index_freshness"]["indexes"]
     assert_equal 0, body["secret_safety"]["sensitive_skipped"]
+    assert_equal 1, body["secret_safety"]["index_runs"]
   end
 
   def test_unknown_path_is_404

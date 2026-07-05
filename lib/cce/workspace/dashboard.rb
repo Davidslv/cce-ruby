@@ -33,18 +33,20 @@ module CCE
         base.merge(by_package: by_package(member_events))
       end
 
-      # Per-member roll-up (deterministic key order: member name ascending) showing
-      # where in the ecosystem CCE helps most: savings + searches + retrieval
-      # quality per member (SPEC-DOCSWEEP Part 1a). `mean_top_score` is the mean
-      # rank-1 score over that member's NON-EMPTY searches (0.0 if none), matching
-      # the north-star-B quality definition.
+      # Per-member roll-up showing where in the ecosystem CCE helps most: savings +
+      # searches + retrieval quality per member (SPEC-DOCSWEEP Part 1a). Serialized
+      # as the canonical cross-engine ARRAY of `{ package, … }` objects, sorted by
+      # `package` ascending (NOT a member-keyed object). `mean_top_score` is the
+      # mean rank-1 score over that member's NON-EMPTY searches (0.0 if none),
+      # matching the north-star-B quality definition.
       def by_package(member_events)
-        member_events.sort_by { |me| me[:member].to_s }.each_with_object({}) do |me, acc|
+        member_events.sort_by { |me| me[:member].to_s }.map do |me|
           searches = me[:events].select { |e| e["event"] == "search" }
           mean = searches.empty? ? 0.0 : searches.sum { |s| s["savings_ratio"].to_f } / searches.length
           non_empty = searches.select { |s| s["result_count"].to_i.positive? }
           top = non_empty.empty? ? 0.0 : non_empty.sum { |s| s["top_score"].to_f } / non_empty.length
-          acc[me[:member]] = {
+          {
+            package: me[:member],
             searches: searches.length,
             tokens_saved: searches.sum { |s| s["tokens_saved"].to_i },
             mean_savings_ratio: r6(mean),

@@ -97,13 +97,14 @@ CCE dashboard (read-only, loopback-only) at http://127.0.0.1:55732/
 $ curl -s http://127.0.0.1:55732/api/health
 {"status":"ok","events":3,"skipped":0}
 
-$ curl -s http://127.0.0.1:55732/api/metrics    # v2.4.1 panels (abridged)
+$ curl -s http://127.0.0.1:55732/api/metrics    # v2.4.1 canonical panels (abridged)
 {
-  "by_source":    { "cli": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211},
-                    "mcp": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211} },
-  "freshness":    { "indexes":1, "last_indexed_ts":"2026-07-05T14:12:34Z",
-                    "sha":"85d9eeacf4d06900a28e17074b55bcf5770b612f", "source":"local" },
-  "secret_safety":{ "sensitive_skipped":0 }
+  "totals":         { "…":"…", "mean_top_score":0.861294 },
+  "by_source":      { "cli": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211,"mean_top_score":0.8783},
+                      "mcp": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211,"mean_top_score":0.844288} },
+  "index_freshness":{ "indexes":1, "source":"local",
+                      "sha":"ce65ece06c4d2f99472a132de8e36c2fc1f98c14", "indexed_ts":"2026-07-05T14:40:29Z" },
+  "secret_safety":  { "sensitive_skipped":0, "index_runs":1 }
 }
 ```
 
@@ -115,7 +116,8 @@ Indexed 1 files (0 skipped, 1 sensitive skipped), 1 chunks in 0.037s
 ```
 
 **Workspace** — a 3-member ecosystem (Rails app + Ruby engine + TS web); the
-refreshed `by_package` section now includes per-member `mean_top_score`:
+refreshed `by_package` is a sorted array of `{package, …}` with per-member
+`mean_top_score`:
 
 ```
 $ cce workspace init /eco   →  Members (3): app [rails-app], billing [ruby-engine], web [typescript]
@@ -133,11 +135,11 @@ $ cce search 'charge' --workspace /eco --top-k 3
 0.841146  billing · lib/billing.rb:2-4 (function/singleton_method)
 
 $ curl -s http://127.0.0.1:PORT/api/metrics    # cce dashboard --workspace /eco (abridged)
-"by_package": {
-  "app":     {"searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.869194},
-  "billing": {"searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.745},
-  "web":     {"searches":1,"tokens_saved":2,"mean_savings_ratio":0.04878, "mean_top_score":0.864528}
-}
+"by_package": [
+  {"package":"app",     "searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.869194},
+  {"package":"billing", "searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.745},
+  {"package":"web",     "searches":1,"tokens_saved":2,"mean_savings_ratio":0.04878, "mean_top_score":0.864528}
+]
 ```
 
 ## Part B — Offline cold start (network denied, no remote)
@@ -183,7 +185,7 @@ CCE dashboard (read-only, loopback-only) at http://127.0.0.1:55757/
 $ sandbox-exec -f nonet.sb curl -s http://127.0.0.1:55757/api/health
 {"status":"ok","events":3,"skipped":0}
 $ sandbox-exec -f nonet.sb curl -s http://127.0.0.1:55757/api/metrics
-… by_source.cli.searches=1  freshness.source=local  secret_safety.sensitive_skipped=0
+… by_source.cli.searches=1  index_freshness.source=local  secret_safety.sensitive_skipped=0
 
 $ sandbox-exec -f nonet.sb cce workspace init /eco   →  Members (3): app, billing, web
 $ sandbox-exec -f nonet.sb cce index --workspace /eco   →  Totals: 9 files, 15 chunks

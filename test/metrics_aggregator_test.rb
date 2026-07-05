@@ -35,6 +35,8 @@ class MetricsAggregatorTest < Minitest::Test
     assert_equal 53_000, t[:tokens_saved]
     assert_equal "0.16", r2(t[:cost_saved_usd])
     assert_equal "0.525000", r6(t[:mean_savings_ratio])
+    # v2.4.1: mean top-1 score over the log's non-empty searches (0.9,0.6,0.4)/3.
+    assert_equal "0.633333", r6(t[:mean_top_score])
     assert_equal 1, t[:helpful]
     assert_equal 1, t[:not_helpful]
     assert_equal "0.500000", r6(t[:helpful_rate])
@@ -116,42 +118,48 @@ class MetricsAggregatorTest < Minitest::Test
     bs = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:by_source]
     assert_equal 1, bs[:cli][:searches]
     assert_equal 100, bs[:cli][:tokens_saved]
+    assert_equal "0.900000", r6(bs[:cli][:mean_top_score])
     assert_equal 1, bs[:mcp][:searches]
     assert_equal 300, bs[:mcp][:tokens_saved]
     assert_equal "0.750000", r6(bs[:mcp][:mean_savings_ratio])
+    assert_equal "0.800000", r6(bs[:mcp][:mean_top_score])
   end
 
-  # Freshness reads the MOST RECENT index event (offline; no remote contact).
-  def test_freshness_from_latest_index_event
+  # index_freshness reads the MOST RECENT index event (offline; no remote contact).
+  def test_index_freshness_from_latest_index_event
     events = [
       { "event" => "index", "ts" => "2026-07-01T09:00:00Z", "id" => "i1",
         "source" => "local", "sha" => "oldsha000000" },
       { "event" => "index", "ts" => "2026-07-04T09:00:00Z", "id" => "i2",
         "source" => "sync-pull", "sha" => "newsha111111" }
     ]
-    fr = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:freshness]
+    fr = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:index_freshness]
+    assert_equal %i[indexes source sha indexed_ts], fr.keys
     assert_equal 2, fr[:indexes]
     assert_equal "newsha111111", fr[:sha]
     assert_equal "sync-pull", fr[:source]
-    assert_equal "2026-07-04T09:00:00Z", fr[:last_indexed_ts]
+    assert_equal "2026-07-04T09:00:00Z", fr[:indexed_ts]
   end
 
-  def test_freshness_and_secret_safety_degrade_on_pre_v24_index
+  def test_index_freshness_and_secret_safety_degrade_on_pre_v24_index
     # Anchor fixture's single index event has neither sha nor source nor skips.
-    fr = aggregate_anchor[:freshness]
+    fr = aggregate_anchor[:index_freshness]
     assert_equal 1, fr[:indexes]
     assert_nil fr[:sha]
     assert_equal "local", fr[:source] # absent source defaults to local
-    assert_equal 0, aggregate_anchor[:secret_safety][:sensitive_skipped]
+    ss = aggregate_anchor[:secret_safety]
+    assert_equal 0, ss[:sensitive_skipped]
+    assert_equal 1, ss[:index_runs]
   end
 
-  def test_secret_safety_sums_sensitive_skipped
+  def test_secret_safety_sums_sensitive_skipped_and_counts_runs
     events = [
       { "event" => "index", "ts" => "2026-07-01T09:00:00Z", "id" => "i1", "sensitive_skipped" => 2 },
       { "event" => "index", "ts" => "2026-07-02T09:00:00Z", "id" => "i2", "sensitive_skipped" => 5 }
     ]
     ss = CCE::Metrics::Aggregator.aggregate(events, now: Time.utc(2026, 7, 5), price: 3.00)[:secret_safety]
     assert_equal 7, ss[:sensitive_skipped]
+    assert_equal 2, ss[:index_runs]
   end
 
   def test_empty_log_is_valid_no_data_aggregate
@@ -172,9 +180,10 @@ class MetricsAggregatorTest < Minitest::Test
     # v2.4 panels are present and empty-safe.
     assert_equal 0, agg[:by_source][:cli][:searches]
     assert_equal 0, agg[:by_source][:mcp][:searches]
-    assert_equal 0, agg[:freshness][:indexes]
-    assert_nil agg[:freshness][:sha]
-    assert_nil agg[:freshness][:source]
+    assert_equal 0, agg[:index_freshness][:indexes]
+    assert_nil agg[:index_freshness][:sha]
+    assert_nil agg[:index_freshness][:source]
     assert_equal 0, agg[:secret_safety][:sensitive_skipped]
+    assert_equal 0, agg[:secret_safety][:index_runs]
   end
 end

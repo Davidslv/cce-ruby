@@ -51,7 +51,7 @@ module CCE
           series: { daily: daily_series(searches, feedbacks) },
           recent_searches: recent_searches(searches, feedbacks),
           by_source: by_source(searches),
-          freshness: freshness(indexes),
+          index_freshness: index_freshness(indexes),
           secret_safety: secret_safety(indexes)
         }
       end
@@ -85,6 +85,7 @@ module CCE
           tokens_saved: tokens_saved,
           cost_saved_usd: round2(tokens_saved / 1_000_000.0 * price),
           mean_savings_ratio: r6(mean_savings_ratio(searches)),
+          mean_top_score: r6(mean_top_score(searches)),
           helpful: helpful,
           not_helpful: not_helpful,
           helpful_rate: rate_or_nil(helpful, not_helpful)
@@ -210,7 +211,8 @@ module CCE
         {
           searches: searches.length,
           tokens_saved: searches.sum { |s| s["tokens_saved"].to_i },
-          mean_savings_ratio: r6(mean_savings_ratio(searches))
+          mean_savings_ratio: r6(mean_savings_ratio(searches)),
+          mean_top_score: r6(mean_top_score(searches))
         }
       end
 
@@ -220,21 +222,25 @@ module CCE
       # sync-pull). "Behind remote" is intentionally NOT computed here — it needs a
       # network round-trip, so it lives in `cce sync status` / the MCP index_status
       # tool, keeping the served dashboard fully offline.
-      def freshness(indexes)
+      def index_freshness(indexes)
         latest = indexes.max_by { |e| ts(e) || Time.at(0) }
         {
           indexes: indexes.length,
-          last_indexed_ts: latest && latest["ts"],
+          source: latest ? (latest["source"] || "local") : nil,
           sha: latest && latest["sha"],
-          source: latest ? (latest["source"] || "local") : nil
+          indexed_ts: latest && latest["ts"]
         }
       end
 
       # Secret-safety reassurance (DASHBOARD refresh §Part 1d): how many sensitive
       # files the walker refused to read, summed across every index event (absent
-      # field contributes 0, so pre-v2.4 logs read as "0 skipped").
+      # field contributes 0, so pre-v2.4 logs read as "0 skipped"), plus the number
+      # of index runs those skips came from.
       def secret_safety(indexes)
-        { sensitive_skipped: indexes.sum { |e| e["sensitive_skipped"].to_i } }
+        {
+          sensitive_skipped: indexes.sum { |e| e["sensitive_skipped"].to_i },
+          index_runs: indexes.length
+        }
       end
 
       # ---- shared measures -----------------------------------------------------

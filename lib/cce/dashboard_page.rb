@@ -181,26 +181,25 @@ module CCE
 
             // v2.4 · Index freshness / sync status + secret-safety reassurance.
             function freshnessPanel(fr, ss) {
-              fr = fr || { indexes: 0, last_indexed_ts: null, sha: null, source: null };
-              ss = ss || { sensitive_skipped: 0 };
+              fr = fr || { indexes: 0, indexed_ts: null, sha: null, source: null };
+              ss = ss || { sensitive_skipped: 0, index_runs: 0 };
               const shortSha = fr.sha ? String(fr.sha).slice(0, 12) : "—";
               const src = fr.source ? (fr.source === "sync-pull" ? "pulled from remote" : "local index") : "—";
               return $("div", { class: "panel" }, [
                 $("h2", { text: "Index freshness · sync · secret-safety" }),
                 $("div", { class: "hint", text: "Is my context current, and is the redaction working? (Behind-remote is shown by `cce sync status`, an explicit network action.)" }),
                 statRow([["Indexed sha", shortSha], ["Source", src]]),
-                statRow([["Last indexed", fr.last_indexed_ts || "—"], ["Index runs", fmtInt(fr.indexes)]]),
-                statRow([["Sensitive files skipped", fmtInt(ss.sensitive_skipped)], ["Secret-safe", ss.sensitive_skipped >= 0 ? "on" : "—"]])
+                statRow([["Last indexed", fr.indexed_ts || "—"], ["Index runs", fmtInt(fr.indexes)]]),
+                statRow([["Sensitive files skipped", fmtInt(ss.sensitive_skipped)], ["Across index runs", fmtInt(ss.index_runs)]])
               ]);
             }
 
             // v2.4 · Per-member / per-package breakdown (workspace): where CCE helps most.
+            // `bp` is the canonical ARRAY of { package, … } objects (already sorted).
             function byPackagePanel(bp) {
-              const names = Object.keys(bp).sort();
-              const rows = names.map(name => {
-                const p = bp[name];
+              const rows = bp.map(p => {
                 return $("tr", {}, [
-                  $("td", { text: name }),
+                  $("td", { text: p.package }),
                   $("td", { class: "num", text: fmtInt(p.searches) }),
                   $("td", { class: "num", text: fmtInt(p.tokens_saved) }),
                   $("td", { class: "num", text: fmtPct(p.mean_savings_ratio) }),
@@ -269,10 +268,10 @@ module CCE
               ]));
 
               // v2.4 · Agent-vs-human usage (MCP vs CLI) + index freshness / sync.
-              app.appendChild($("div", { class: "ns" }, [agentHumanPanel(m.by_source), freshnessPanel(m.freshness, m.secret_safety)]));
+              app.appendChild($("div", { class: "ns" }, [agentHumanPanel(m.by_source), freshnessPanel(m.index_freshness, m.secret_safety)]));
 
-              // v2.4 · Per-member / per-package breakdown (workspace only).
-              if (m.by_package && Object.keys(m.by_package).length) app.appendChild(byPackagePanel(m.by_package));
+              // v2.4 · Per-member / per-package breakdown (workspace only; array).
+              if (Array.isArray(m.by_package) && m.by_package.length) app.appendChild(byPackagePanel(m.by_package));
 
               // Recent searches table.
               const rows = (m.recent_searches || []).map(r => $("tr", {}, [

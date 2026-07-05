@@ -456,7 +456,7 @@ panels (all computed offline from the log — no remote contact):
 The dashboard inlines all CSS/JS and draws its own SVG charts — **no external
 network, CDN, or remote fonts/scripts** — consistent with CCE's offline posture.
 It also exposes `GET /api/metrics` (the aggregate JSON, including the
-`by_source`/`freshness`/`secret_safety` sections) and `GET /api/health`. See
+`by_source`/`index_freshness`/`secret_safety` sections) and `GET /api/health`. See
 [`docs/dashboard.md`](docs/dashboard.md) for the pipeline, event schema, and
 aggregation formulas.
 
