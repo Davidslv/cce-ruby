@@ -50,6 +50,7 @@ GEM
       sorbet-runtime (~> 0.5)
     tree_sitter_language_pack (1.12.4-x86_64-linux)
       sorbet-runtime (~> 0.5)
+    webrick (1.9.2)
     zeitwerk (2.8.2)
 
 PLATFORMS
@@ -69,6 +70,7 @@ DEPENDENCIES
   simplecov (~> 0.22)
   sqlite3 (~> 2.9)
   tree_sitter_language_pack (~> 1.12)
+  webrick (~> 1.9)
 
 CHECKSUMS
   bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
@@ -96,6 +98,7 @@ CHECKSUMS
   tree_sitter_language_pack (1.12.4-arm64-darwin) sha256=9ba3c6dd0319465d4363ec414f40733e9dc87ba6aba4302309ac6749c6993bcd
   tree_sitter_language_pack (1.12.4-x86_64-darwin) sha256=a80c8e46805cad6f88e81dcc76e53546dba780d62d1e6d0ea1f1be271a893a8b
   tree_sitter_language_pack (1.12.4-x86_64-linux) sha256=66c8986b643487580a924ccde133f16fdf752352fb8d85bbc95b1e2d1a6283b2
+  webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
   zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
 
 RUBY VERSION
