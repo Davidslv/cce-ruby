@@ -1,5 +1,7 @@
 module Billing
-  class Engine < Rails::Engine
-    isolate_namespace Billing
+  class Engine
+    def isolate
+      :billing
+    end
   end
 end
