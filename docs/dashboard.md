@@ -49,14 +49,15 @@ One JSON object per line, UTF-8. Every event carries `schema`
 (`"cce.metrics/v1"`), `event`, `ts` (ISO-8601 UTC, second precision), and `id`
 (12 lowercase-hex chars).
 
-**`search`** (appended by `cce search`):
+**`search`** (appended by `cce search` and the MCP `context_search` tool):
 
 ```json
 {"schema":"cce.metrics/v1","event":"search","ts":"…","id":"…",
  "query":"…","top_k":5,"graph_enabled":true,"embedder":"hash","result_count":3,
  "baseline_tokens":40000,"served_tokens":8000,"tokens_saved":32000,
  "savings_ratio":0.8,"top_score":0.9,"mean_score":0.7,
- "empty":false,"low_confidence":false,"latency_ms":5.0}
+ "empty":false,"low_confidence":false,"latency_ms":5.0,
+ "source":"cli","package":"billing"}
 ```
 
 - `served_tokens` = Σ `token_count(content)` over the returned chunks.
@@ -66,14 +67,28 @@ One JSON object per line, UTF-8. Every event carries `schema`
 - `tokens_saved` = `max(0, baseline_tokens − served_tokens)`;
   `savings_ratio` = `tokens_saved / baseline_tokens` (0.0 when baseline is 0).
 - `low_confidence` = `result_count > 0 AND top_score < 0.30`.
+- **`source`** (v2.4.1, additive) — `"cli"` for the human CLI path, `"mcp"` for
+  the agent/`context_search` path. Drives the agent-vs-human panel. Absent on
+  pre-v2.4 logs, which then read as `"cli"`.
+- **`package`** (v2.4.1, optional) — the workspace member/package filter, when one
+  was applied; omitted otherwise.
 
-**`index`** (appended by `cce index`):
+**`index`** (appended by `cce index` and by `cce sync pull`):
 
 ```json
 {"schema":"cce.metrics/v1","event":"index","ts":"…","id":"…",
  "files_indexed":231,"chunks":1728,"index_bytes":123456,"duration_ms":740.0,
- "embedder":"hash","full":true}
+ "embedder":"hash","full":true,
+ "source":"local","sensitive_skipped":4,"sha":"9f3c1ab77e20d41c"}
 ```
+
+- **`source`** (v2.4.1) — `"local"` for a `cce index` run, `"sync-pull"` for an
+  index installed by `cce sync pull`. Drives the freshness panel's local-vs-pulled
+  reading.
+- **`sensitive_skipped`** (v2.4.1) — how many files the secret-safe walker refused
+  to read on this run. Summed across index events for the secret-safety panel.
+- **`sha`** (v2.4.1, optional) — the VCS commit the index was built from / pulled
+  at; omitted when the directory is not a git repo.
 
 **`feedback`** (appended by `cce feedback`):
 
@@ -128,6 +143,67 @@ The DASHBOARD-SPEC §4.1 anchor over
 [`../test/fixture/metrics_sample.jsonl`](../test/fixture/metrics_sample.jsonl)
 is the cross-language equivalence gate — both the Ruby and Rust implementations
 must reproduce its numbers exactly (`test/metrics_aggregator_test.rb`).
+
+## v2.4.1 refreshed panels (additive `/api/metrics` sections)
+
+Since v1.1 the engine gained workspaces (v2.2), Sync (v2.3), MCP (v2.4) and
+secret-scrubbing (v2.1). The **v2.4.1 dashboard refresh** surfaces what those made
+valuable, as three new top-level `/api/metrics` sections (plus one field on the
+workspace `by_package`). Every one degrades gracefully on old logs, and — like the
+rest of the aggregate — is computed **offline from the log** (no remote contact),
+so the dashboard stays fully offline.
+
+These keys are the **single cross-engine canonical contract** — cce-ruby and
+cce-rust emit byte-identical shapes.
+
+```json
+{
+  "totals": { "…": "…", "mean_top_score": 0.633333 },
+  "by_source": {
+    "cli": {"searches": 21, "tokens_saved": 105274, "mean_savings_ratio": 0.585000, "mean_top_score": 0.712000},
+    "mcp": {"searches": 18, "tokens_saved":  98901, "mean_savings_ratio": 0.601000, "mean_top_score": 0.704000}
+  },
+  "index_freshness": {
+    "indexes": 1, "source": "sync-pull",
+    "sha": "9f3c1ab77e20d41c", "indexed_ts": "2026-06-25T09:00:00Z"
+  },
+  "secret_safety": { "sensitive_skipped": 4, "index_runs": 1 }
+}
+```
+
+- **`totals.mean_top_score`** — mean rank-1 score over the log's non-empty searches
+  (the unwindowed twin of north-star B).
+- **`by_source` — agent vs human.** Every search bucketed by `source`
+  (`mcp` = agent/`context_search`, everything else = `cli`), so you can see how
+  much your agent leans on CCE vs your own CLI use. Pre-v2.4 searches bucket as
+  `cli`. Each bucket carries `searches`, `tokens_saved`, `mean_savings_ratio`, and
+  `mean_top_score`.
+- **`index_freshness` — index freshness / sync status.** Derived from the
+  most-recent `index` event: `indexes` (run count), `source` (local vs
+  `sync-pull`), `sha`, and `indexed_ts`. **"Behind remote" is deliberately not
+  here** — it needs a network round-trip, so it lives in `cce sync status` (an
+  explicit network action) and the MCP `index_status` tool, keeping the served
+  dashboard offline.
+- **`secret_safety` — redaction reassurance.** `sensitive_skipped` summed across
+  index events (files the secret-safe walker refused to read), plus `index_runs`
+  (how many index events contributed).
+
+**Workspace `by_package`** (from `cce dashboard --workspace`) rolls the ecosystem
+up per member as a **sorted array of objects** (each with a `package` field) that
+now includes per-member retrieval quality:
+
+```json
+"by_package": [
+  {"package": "app",     "searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.869194},
+  {"package": "billing", "searches": 1, "tokens_saved": 0, "mean_savings_ratio": 0.0,     "mean_top_score": 0.745000},
+  {"package": "web",     "searches": 1, "tokens_saved": 2, "mean_savings_ratio": 0.04878, "mean_top_score": 0.864528}
+]
+```
+
+The self-contained page renders these as an **Agent vs human usage** panel, an
+**Index freshness · sync · secret-safety** panel, and (workspace mode) a
+**Per-member breakdown** table. See [`dashboard.png`](dashboard.png) for the
+current layout and [`VERIFIED.md`](VERIFIED.md) for a captured run.
 
 ## The web dashboard
 

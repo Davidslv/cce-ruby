@@ -20,6 +20,9 @@ require "tmpdir"
 require "fileutils"
 require_relative "../indexer"
 require_relative "../store"
+require_relative "../metrics"
+require_relative "../metrics_event_log"
+require_relative "../metrics_recorder"
 require_relative "git"
 require_relative "artifact"
 require_relative "content_address"
@@ -101,11 +104,28 @@ module CCE
         guard_overwrite!(sha, force)
         manifest = Artifact.import(bytes, store)
         write_marker(repo_id: repo_id, sha: sha, key: key, checksum: manifest["checksum"])
+        record_pull_index(store, sha, manifest)
 
         {
           sha: sha, key: key, checksum: manifest["checksum"], repo_id: repo_id,
           chunk_count: manifest["chunk_count"], tree_matches: tree_matches?(sha), forced: force
         }
+      end
+
+      # Append an `index` event tagged source "sync-pull" so the dashboard's index-
+      # freshness panel shows this cache came from the team remote, not a local
+      # index (SPEC-DOCSWEEP Part 1c). Best-effort: a metrics failure must never
+      # break a pull, and it never touches the shared artifact/checksum.
+      def record_pull_index(store_path, sha, manifest)
+        mpath = File.join(File.dirname(store_path), Metrics::FILE)
+        Metrics::Recorder.new(log: Metrics::EventLog.new(mpath)).record_index(
+          files_indexed: 0, chunks: manifest["chunk_count"].to_i,
+          index_bytes: File.exist?(store_path) ? File.size(store_path) : 0,
+          duration_ms: 0.0, embedder: manifest["embedder"] || SHAREABLE_EMBEDDER,
+          full: true, sha: sha, source: "sync-pull"
+        )
+      rescue StandardError
+        nil
       end
 
       # ---- status --------------------------------------------------------------

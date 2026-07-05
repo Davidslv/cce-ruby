@@ -51,7 +51,7 @@ bundle exec rake test
 ```
 
 This is **the** command. The suite is deterministic and hermetic (no network).
-Current baseline: **84 tests, ~94% line coverage** (SimpleCov). One test is
+Current baseline: **372 tests, ~94.8% line coverage** (SimpleCov). One test is
 skipped by design — the live Ollama integration test, which requires a running
 server. To include it:
 
@@ -70,7 +70,7 @@ Every change must satisfy all of these before it can be merged:
    baseline. New code ships with new tests.
 3. **Test-first** — write the failing test that pins the behaviour, then the
    minimum code to pass it. See [`docs/TDD.md`](docs/TDD.md) for the style.
-4. **Spec conformance unchanged** — `bundle exec bin/cce conformance test/fixture`
+4. **Spec conformance unchanged** — `bundle exec bin/cce conformance test/fixture/samples`
    must still produce the committed `conformance.json` byte-for-byte, unless the
    change is an intentional, documented spec revision (a version bump).
 5. **Docs updated** — if behaviour, flags, or architecture change, update the

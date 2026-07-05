@@ -75,9 +75,8 @@ artifact** both engines export and import. It is specified byte-exactly so the
 blob for `repo@sha` is identical across people and across both engines, and so
 `--verify` works cross-language.
 
-The canonical format is pinned in
-[`SPEC-SYNC-RECONCILE.md`](../SPEC-SYNC-RECONCILE.md) (the single format both
-engines reconciled on). **Layout.** A UTF-8 stream with **LF after every line,
+The canonical format is pinned in [`SPEC-SYNC.md`](../SPEC-SYNC.md) §2 (the single
+format both engines reconciled on). **Layout.** A UTF-8 stream with **LF after every line,
 including the last**; all JSON compact (no insignificant whitespace) with keys
 sorted lexicographically:
 

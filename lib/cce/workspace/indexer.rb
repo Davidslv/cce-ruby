@@ -66,7 +66,9 @@ module CCE
           index_bytes: File.exist?(store_path) ? File.size(store_path) : 0,
           duration_ms: summary[:elapsed] * 1000.0,
           embedder: embedder.is_a?(String) ? embedder : embedder.name,
-          full: true
+          full: true,
+          source: "local",
+          sensitive_skipped: summary[:sensitive_skipped]
         )
       rescue StandardError
         nil

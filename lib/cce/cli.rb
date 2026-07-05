@@ -148,9 +148,20 @@ module CCE
         index_bytes: File.exist?(store) ? File.size(store) : 0,
         duration_ms: summary[:elapsed] * 1000.0,
         embedder: embedder,
-        full: true
+        full: true,
+        sha: git_sha_for(dir),
+        source: "local",
+        sensitive_skipped: summary[:sensitive_skipped]
       )
       0
+    end
+
+    # Best-effort VCS sha of the indexed dir for the dashboard's freshness panel;
+    # nil when the dir is not a git repo (offline-safe, never raises).
+    def git_sha_for(dir)
+      Sync::Git.repo?(dir) ? Sync::Git.head_sha(dir) : nil
+    rescue StandardError
+      nil
     end
 
     # ---- search --------------------------------------------------------------

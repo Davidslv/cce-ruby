@@ -4,10 +4,219 @@ This file records **actual** cold-start runs of the documented walkthroughs —
 every command executed verbatim, output captured (not invented). A doc example
 that does not run verbatim is a bug.
 
+- [Offline-first (v2.4.1) — **online AND offline** cold start](#offline-first-v241--online-and-offline-cold-start)
+  — the mandatory proof that `index`, `search`, `stats`, `dashboard`, `workspace`,
+  and `cce mcp` all run with **no network and no remote**, plus the refreshed
+  dashboard `/api/metrics` shape.
 - [CCE MCP (v2.4)](#cce-mcp--cold-start-verification-transcript) — `cce init`,
   the `cce mcp` server over stdio, and the dashboard proof-of-use.
 - [CCE Sync (v2.3)](#cce-sync--cold-start-verification-transcript) — the
   distributed-cache walkthrough against a local `file://` remote.
+
+---
+
+# Offline-first (v2.4.1) — online AND offline cold start
+
+Date: 2026-07-05 · cce-ruby **v2.4.1** · macOS (darwin arm64) · `ruby 3.4.7` ·
+`git 2.50.1`. Commands run from the repo via `./bin/cce …` (an installed `cce` on
+`PATH` behaves identically).
+
+**Offline-first is the headline guarantee.** A source-code audit (`grep` for
+`Net::HTTP`/`TCPSocket`/`Socket`/`WEBrick` across `lib/`) shows the **only**
+network-capable code paths are:
+
+1. **Installing the gem** (`gem install` / `bundle install`) — one-time.
+2. The **optional** Ollama embedder (`--embedder ollama`) — talks to a *local*
+   Ollama daemon on `http://localhost:11434`; the default `hash` embedder needs
+   nothing.
+3. **`cce sync push` / `cce sync pull`** — git transport to a configured remote.
+
+Everything else — `index`, `search`, `stats`, `dashboard`, `workspace`, and
+`cce mcp` serving the local index — makes **no outbound network calls at all**.
+The dashboard's only socket is a **loopback** (`127.0.0.1`) bind.
+
+## Part A — Online cold start (network up, no remote configured)
+
+A throwaway git project with two Python files (`auth.py`, `payments.py`):
+
+```
+$ cce index /demo
+Indexed 2 files (0 skipped, 0 sensitive skipped), 4 chunks in 0.035s
+Store: /demo/.cce/index.db
+
+$ cce search 'password hashing' --dir /demo
+1. [0.878300] auth.py:4-5 (function/function_definition)
+    def hash_password(password):
+2. [0.876031] auth.py:8-9 (function/function_definition)
+    def verify_password(password, digest):
+3. [0.488935] payments.py:5-6 (function/function_definition)
+    def refund(payment_id):
+4. [0.466633] payments.py:1-2 (function/function_definition)
+    def process_payment(amount, currency):
+query-id: d6a36129d076  ·  rate with: cce feedback d6a36129d076 --helpful|--not-helpful
+
+$ cce stats --dir /demo
+Chunks:     4
+Files:      2
+Languages:  python=4
+Kinds:      function_definition=4
+Avg tokens: 21.8
+Store size: 49152 bytes
+```
+
+An **agent** search over the same local index (the MCP `context_search` path)
+tags its event `source: "mcp"`, so the dashboard can split agent-vs-human usage:
+
+```
+$ printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"context_search","arguments":{"query":"refund a payment"}}}' \
+  | cce mcp --dir /demo
+… id:1 → serverInfo {"name":"cce","version":"2.4.1"} …
+… id:2 → "1. [0.844288] payments.py:5-6 (function/function_definition) def refund(payment_id): …  query_id: d43dc909ce58"
+```
+
+The persisted `.cce/metrics.jsonl` now carries the **v2.4.1 additive schema** — an
+`index` event with `sha`/`source`/`sensitive_skipped`, a `cli` search, and an
+`mcp` search (one JSON object per line, abridged here):
+
+```
+{"event":"index",  …,"embedder":"hash","full":true,"source":"local","sensitive_skipped":0,"sha":"85d9eeacf4d06900a28e17074b55bcf5770b612f"}
+{"event":"search", …,"tokens_saved":8,"savings_ratio":0.0842…,"top_score":0.8783…,"source":"cli"}
+{"event":"search", …,"tokens_saved":8,"savings_ratio":0.0842…,"top_score":0.8443…,"source":"mcp"}
+```
+
+The refreshed dashboard serves those as new `/api/metrics` sections (live on
+refresh, computed offline from the log — no remote contact):
+
+```
+$ cce dashboard --dir /demo --port 0     # loopback-only
+CCE dashboard (read-only, loopback-only) at http://127.0.0.1:55732/
+
+$ curl -s http://127.0.0.1:55732/api/health
+{"status":"ok","events":3,"skipped":0}
+
+$ curl -s http://127.0.0.1:55732/api/metrics    # v2.4.1 canonical panels (abridged)
+{
+  "totals":         { "…":"…", "mean_top_score":0.861294 },
+  "by_source":      { "cli": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211,"mean_top_score":0.8783},
+                      "mcp": {"searches":1,"tokens_saved":8,"mean_savings_ratio":0.084211,"mean_top_score":0.844288} },
+  "index_freshness":{ "indexes":1, "source":"local",
+                      "sha":"ce65ece06c4d2f99472a132de8e36c2fc1f98c14", "indexed_ts":"2026-07-05T14:40:29Z" },
+  "secret_safety":  { "sensitive_skipped":0, "index_runs":1 }
+}
+```
+
+**Secret-safety** — a `.env` next to the code is never read, and is counted:
+
+```
+$ cce index /secretdemo         # dir contains app.py + a .env with an AWS key
+Indexed 1 files (0 skipped, 1 sensitive skipped), 1 chunks in 0.037s
+```
+
+**Workspace** — a 3-member ecosystem (Rails app + Ruby engine + TS web); the
+refreshed `by_package` is a sorted array of `{package, …}` with per-member
+`mean_top_score`:
+
+```
+$ cce workspace init /eco   →  Members (3): app [rails-app], billing [ruby-engine], web [typescript]
+$ cce index --workspace /eco
+Workspace index: 3 members
+  app [rails-app]: 3 files, 6 chunks
+  billing [ruby-engine]: 3 files, 6 chunks
+  web [typescript]: 3 files, 3 chunks
+Totals: 9 files, 15 chunks
+Graph: 1 cross-member edges -> /eco/.cce/workspace-graph.json
+
+$ cce search 'charge' --workspace /eco --top-k 3
+0.887500  app · app/models/charge.rb:1-5 (class/class)
+0.858470  app · app/models/charge.rb:2-4 (function/method)
+0.841146  billing · lib/billing.rb:2-4 (function/singleton_method)
+
+$ curl -s http://127.0.0.1:PORT/api/metrics    # cce dashboard --workspace /eco (abridged)
+"by_package": [
+  {"package":"app",     "searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.869194},
+  {"package":"billing", "searches":1,"tokens_saved":0,"mean_savings_ratio":0.0,     "mean_top_score":0.745},
+  {"package":"web",     "searches":1,"tokens_saved":2,"mean_savings_ratio":0.04878, "mean_top_score":0.864528}
+]
+```
+
+## Part B — Offline cold start (network denied, no remote)
+
+Re-run under a macOS `sandbox-exec` profile that **denies all non-loopback
+network** (equivalent to pulling the ethernet cable). First we prove the sandbox
+is genuinely offline, then run every core workflow inside it:
+
+```
+$ cat nonet.sb
+(version 1)
+(allow default)
+(deny network-outbound) (deny network-inbound)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-inbound  (local  ip "localhost:*"))
+(allow network-bind     (local  ip "localhost:*"))
+
+$ sandbox-exec -f nonet.sb curl -sS --max-time 3 https://example.com
+curl: (6) Could not resolve host: example.com          # ← genuinely offline
+
+$ sandbox-exec -f nonet.sb cce index /offline
+Indexed 2 files (0 skipped, 0 sensitive skipped), 4 chunks in 0.039s
+
+$ sandbox-exec -f nonet.sb cce search 'verify password' --dir /offline
+1. [0.878300] auth.py:4-5 (function/function_definition)
+    def hash_password(password):
+2. [0.876031] auth.py:8-9 (function/function_definition)
+    def verify_password(password, digest):
+…
+query-id: 8402a3ee4d25  ·  rate with: cce feedback 8402a3ee4d25 --helpful|--not-helpful
+
+$ sandbox-exec -f nonet.sb cce stats --dir /offline
+Chunks:     4
+Files:      2
+Languages:  python=4
+Kinds:      function_definition=4
+
+$ sandbox-exec -f nonet.sb cce mcp --dir /offline      # serves the LOCAL index, offline
+… context_search "verify password" → "1. [0.878300] auth.py:4-5 (function/function_definition) def hash_password(password): …"
+
+$ sandbox-exec -f nonet.sb cce dashboard --dir /offline --port 0
+CCE dashboard (read-only, loopback-only) at http://127.0.0.1:55757/
+$ sandbox-exec -f nonet.sb curl -s http://127.0.0.1:55757/api/health
+{"status":"ok","events":3,"skipped":0}
+$ sandbox-exec -f nonet.sb curl -s http://127.0.0.1:55757/api/metrics
+… by_source.cli.searches=1  index_freshness.source=local  secret_safety.sensitive_skipped=0
+
+$ sandbox-exec -f nonet.sb cce workspace init /eco   →  Members (3): app, billing, web
+$ sandbox-exec -f nonet.sb cce index --workspace /eco   →  Totals: 9 files, 15 chunks
+$ sandbox-exec -f nonet.sb cce stats  --workspace /eco   →  Totals: 9 files, 15 chunks
+
+$ sandbox-exec -f nonet.sb cce sync status /offline       # no remote → graceful, no crash
+sync: not configured (run `cce sync init --remote <git-url>`)
+```
+
+The **only** things that need the network, confirmed by failing cleanly offline:
+
+```
+$ sandbox-exec -f nonet.sb cce index /offline --embedder ollama
+error: Cannot reach Ollama at http://localhost:11434 (Connection refused …).
+Start it, or use the default hash embedder (--embedder hash).
+```
+
+`cce sync push/pull` likewise raise a clear `Sync::Error` when the remote is
+unreachable and **never corrupt the local `.cce/`** (offline-first; covered by
+`test/sync_commands_test.rb`). Everything else above ran identically online and
+offline — that is the guarantee.
+
+## v2.4.1 gate results (this build)
+
+| gate | result |
+|------|--------|
+| `bundle exec rake test` | **372 runs, 1553 assertions, 0 failures, 0 errors, 1 skip** (the pre-existing Ollama skip) |
+| Line coverage | **94.78%** (≥ 93% required) |
+| `conformance.json` (single-repo) | **byte-identical** to `main` (unchanged) |
+| Cross-language sync golden | **unchanged** — `581cbd0f…`, `SYNC_FORMAT_VERSION = "2.3"` (the version bump is decoupled) |
+| Offline cold-start (this section) | **runs verbatim** under a network-denied sandbox |
 
 ---
 
@@ -287,8 +496,8 @@ pusher.
 
 ### Cross-language diff target (reconciled format)
 
-Per [`SPEC-SYNC-RECONCILE.md`](../SPEC-SYNC-RECONCILE.md), the shared golden
-indexes `test/fixture/samples` (byte-identical in both repos) and builds the
+Per [`SPEC-SYNC.md`](../SPEC-SYNC.md) §2 (the reconciled canonical format), the
+shared golden indexes `test/fixture/samples` (byte-identical in both repos) and builds the
 artifact with `repo_id="cce/demo"` and `sha="0"×40`. The Ruby engine produces:
 
 ```

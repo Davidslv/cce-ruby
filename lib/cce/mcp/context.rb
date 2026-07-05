@@ -115,7 +115,7 @@ module CCE
         file_tokens, embedder = store_context(@store_path)
         recorder(metrics_path).record_search(
           query: query, top_k: top_k, graph_enabled: graph_enabled, embedder: embedder,
-          results: results, file_token_counts: file_tokens, latency_ms: 0.0
+          results: results, file_token_counts: file_tokens, latency_ms: 0.0, source: "mcp"
         )
       end
 
@@ -146,14 +146,15 @@ module CCE
         cross_edges = Workspace::Graph.load(@root)[:edges]
         retriever = Workspace::FederatedRetriever.new(members: loaded, cross_edges: cross_edges)
         results = retriever.search(query, top_k: top_k, graph_enabled: graph_enabled)
-        event = record_workspace_search_event(results, query, top_k, graph_enabled, members)
+        event = record_workspace_search_event(results, query, top_k, graph_enabled, members, package)
         { results: results, query_id: event && event["id"], indexed: true }
       end
 
-      def record_workspace_search_event(results, query, top_k, graph_enabled, members)
+      def record_workspace_search_event(results, query, top_k, graph_enabled, members, package)
         recorder(metrics_path).record_search(
           query: query, top_k: top_k, graph_enabled: graph_enabled, embedder: "hash",
-          results: results, file_token_counts: workspace_file_tokens(members), latency_ms: 0.0
+          results: results, file_token_counts: workspace_file_tokens(members), latency_ms: 0.0,
+          source: "mcp", package: package
         )
       end
 

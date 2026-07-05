@@ -6,6 +6,11 @@
 #       (baseline/served/saved/ratio/scores/flags), and appends via an EventLog.
 # RESPONSIBILITIES:
 #   - Own the event field set and the search-metrics derivation (DASHBOARD-SPEC §2.1).
+#   - Own the v2.4 additive schema fields that feed the refreshed dashboard:
+#     `source` ("cli"|"mcp") + optional `package` on search events; `sha`, `source`
+#     ("local"|"sync-pull") and `sensitive_skipped` on index events. Every one is
+#     optional/defaulted so pre-v2.4 logs (which lack them) still parse and degrade
+#     gracefully in the aggregator.
 #   - Honour the enabled gate for auto-metrics (search/index); feedback is explicit
 #     and always recorded.
 #   - Deliberately NOT own persistence mechanics (EventLog) or aggregation.
@@ -30,8 +35,14 @@ module CCE
       # Append a `search` event (DASHBOARD-SPEC §2.1). `results` is the returned
       # result list (each with :file_path, :token_count, :score); `file_token_counts`
       # maps file_path => whole-file token count for the baseline (SPEC §3).
+      #
+      # `source` (v2.4, additive) tags who ran the search — "cli" for the human CLI
+      # path, "mcp" for the agent/context_search path — so the dashboard can split
+      # agent-vs-human usage. `package` (optional) records the workspace member/
+      # package filter, if any. Both default so pre-v2.4 logs parse unchanged.
       # @return [Hash, nil] the appended event, or nil when metrics are disabled.
-      def record_search(query:, top_k:, graph_enabled:, embedder:, results:, file_token_counts:, latency_ms:)
+      def record_search(query:, top_k:, graph_enabled:, embedder:, results:, file_token_counts:, latency_ms:,
+                        source: "cli", package: nil)
         return nil unless @enabled
 
         served = results.sum { |r| r[:token_count].to_i }
@@ -62,15 +73,24 @@ module CCE
           "mean_score" => mean_score,
           "empty" => empty,
           "low_confidence" => low_confidence,
-          "latency_ms" => latency_ms.to_f
+          "latency_ms" => latency_ms.to_f,
+          "source" => source
         )
+        event["package"] = package if package
         @log.append(event)
         event
       end
 
       # Append an `index` event (DASHBOARD-SPEC §2.2).
+      #
+      # `sha` (v2.4, additive) records the VCS commit the index was built from (or
+      # pulled at); `source` is "local" for a `cce index` run or "sync-pull" for an
+      # index installed by `cce sync pull`; `sensitive_skipped` is how many files
+      # the secret-safe walker refused to read. These feed the dashboard's index-
+      # freshness and secret-safety panels. All default so pre-v2.4 logs parse.
       # @return [Hash, nil] the appended event, or nil when metrics are disabled.
-      def record_index(files_indexed:, chunks:, index_bytes:, duration_ms:, embedder:, full:)
+      def record_index(files_indexed:, chunks:, index_bytes:, duration_ms:, embedder:, full:,
+                       sha: nil, source: "local", sensitive_skipped: 0)
         return nil unless @enabled
 
         event = base_event("index").merge(
@@ -79,8 +99,11 @@ module CCE
           "index_bytes" => index_bytes,
           "duration_ms" => duration_ms.to_f,
           "embedder" => embedder,
-          "full" => full
+          "full" => full,
+          "source" => source,
+          "sensitive_skipped" => sensitive_skipped.to_i
         )
+        event["sha"] = sha if sha
         @log.append(event)
         event
       end

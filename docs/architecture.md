@@ -158,8 +158,10 @@ CLI search
   Incremental, per-file updates would be faster on large repos but add
   substantial complexity for a use case the spec does not target (see D6).
 - **Why localhost-only, opt-in networking?** Privacy and reproducibility. The
-  default path never touches the network; the one optional path is localhost
-  HTTP to Ollama and fails gracefully.
+  default `index`/`search`/`stats`/`dashboard`/`workspace`/`mcp` paths never touch
+  the network. Only three things ever do, all explicit: installing the gem, the
+  optional localhost-HTTP Ollama embedder (fails gracefully), and `cce sync
+  push`/`pull` (git transport to a configured remote). See CCE Sync below.
 
 ## Determinism (how it is guaranteed)
 

@@ -51,8 +51,9 @@ matters more than boilerplate, so here is the real picture.
 - **The only optional network path is opt-in.** Passing `--embedder ollama`
   makes CCE talk to a local [Ollama](https://ollama.com/) server over
   **localhost HTTP** (`http://localhost:11434`). This is opt-in, localhost-only,
-  and fails gracefully with a clear message if the server is unreachable. No
-  other host is ever contacted.
+  and fails gracefully with a clear message if the server is unreachable. The
+  embedder path contacts no other host. (The only remote-host contact anywhere is
+  the opt-in CCE Sync git transport, in the next bullet.)
 - **CCE Sync is opt-in, git-transported, and RBAC-free by design (v2.3).**
   `cce sync …` is inert unless you configure a `sync.remote`. When configured, all
   transport, authentication, and access control are **git's own** (SSH/HTTPS

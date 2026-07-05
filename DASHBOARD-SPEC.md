@@ -349,3 +349,56 @@ When done, report: what you built, new test count + coverage, confirmation the
 aggregator anchor passes and base `conformance.json` is unchanged, all gates
 green, and the `feat/dashboard` branch commit hash.
 ```
+
+---
+
+## Appendix A — v2.4.1 additive schema & panels (dashboard refresh)
+
+Normative, additive, and **backward-compatible**: every field below is optional
+and defaulted, so pre-v2.4 logs parse unchanged and the §4.1 anchor is unaffected
+(it asserts field-by-field, not whole-hash equality). Both engines expose the same
+`/api/metrics` keys.
+
+**Event fields.** `search` gains `source` (`"cli"` | `"mcp"`; absent ⇒ `"cli"`)
+and optional `package`. `index` gains `source` (`"local"` | `"sync-pull"`; absent
+⇒ `"local"`), `sensitive_skipped` (int; absent ⇒ 0), and optional `sha`.
+
+**Aggregate sections** (the **single cross-engine canonical contract** — both
+engines emit identical keys; added to the §4 output; all computed **purely** from
+the log, so the served dashboard makes no network call):
+
+```json
+"totals": { …, "mean_top_score":number/*6dp*/ },        // mean top_score over the log's non-empty searches
+"by_source": {
+  "cli": {"searches":int,"tokens_saved":int,"mean_savings_ratio":number/*6dp*/,"mean_top_score":number/*6dp*/},
+  "mcp": {"searches":int,"tokens_saved":int,"mean_savings_ratio":number/*6dp*/,"mean_top_score":number/*6dp*/}
+},
+"index_freshness": {
+  "indexes":int, "source":"local"|"sync-pull"|null,
+  "sha":string|null, "indexed_ts":string|null            // from the latest index event
+},
+"secret_safety": { "sensitive_skipped":int, "index_runs":int }   // summed / counted over index events
+```
+
+- `totals.mean_top_score`: mean of `top_score` over the log's non-empty searches
+  (the unwindowed north-star-B measure); `0.0` if none.
+- `by_source`: bucket every search by `source` (`mcp` = agent; everything else,
+  including absent, counts as `cli`/human). Each bucket carries `searches`,
+  `tokens_saved`, `mean_savings_ratio`, `mean_top_score`.
+- `index_freshness`: from the most-recent `index` event by `ts`. **`remote_latest`/
+  `behind_remote` are intentionally excluded** (they need a network round-trip) —
+  they are reported by `cce sync status` and the MCP `index_status` tool, never the
+  offline dashboard.
+- `secret_safety`: `Σ sensitive_skipped` over index events, plus `index_runs` (the
+  number of index events).
+
+**Workspace `by_package`** is a **sorted ARRAY of objects**, each
+`{ "package":string, "searches":int, "tokens_saved":int, "mean_savings_ratio":number,
+"mean_top_score":number }` (NOT a member-keyed object), sorted by `package`
+ascending. `mean_top_score` is the mean rank-1 score over that member's non-empty
+searches (`0.0` if none).
+
+The four refreshed page panels: **per-member breakdown** (workspace), **agent-vs-
+human** (`by_source`), **index freshness / sync** (`freshness`), and **secret-
+safety** (`secret_safety`). Posture is unchanged — loopback-only, read-only,
+self-contained, no external network.

@@ -7,8 +7,10 @@ Where the spec was explicit, no decision was needed and none is recorded here.
 
 **Ambiguity:** The spec mandates tree-sitter but not how to obtain grammars in
 Ruby. **Decision:** Use `ruby_tree_sitter` for parsing and
-`tree_sitter_language_pack` for prebuilt Python/JavaScript grammar dylibs; load
-them via `TreeSitter::Language.load`. We still walk the raw parse tree ourselves
+`tree_sitter_language_pack` for prebuilt grammar dylibs (all six shipped
+languages — Ruby, Rust, TypeScript, C, Python, JavaScript; originally Python/
+JavaScript, extended by the v2.0 pack set); load them via
+`TreeSitter::Language.load`. We still walk the raw parse tree ourselves
 so byte spans and node selection follow the spec exactly. Avoids a runtime C
 build. Pinned in the Gemfile.
 
@@ -429,8 +431,9 @@ scratch when you want the guarantee. A failed remote operation raises a clear
 
 **Context:** the Ruby and Rust engines initially diverged on the interchange
 artifact, so cross-engine byte-identity (SPEC-SYNC §10, a hard requirement) did not
-hold. `SPEC-SYNC-RECONCILE.md` pins the single canonical format. **Decision:** align
-exactly, which reverses three earlier local calls:
+hold. [`SPEC-SYNC.md`](../SPEC-SYNC.md) §2 pins the single canonical format both
+engines reconciled on. **Decision:** align exactly, which reverses three earlier
+local calls:
 
 - **Provenance is removed entirely (supersedes D35).** The manifest no longer
   carries `built_at`/`built_by`; dropping them makes the whole file reproducible,
@@ -510,3 +513,30 @@ the CI-built index (the pull lazily clones — no separate `sync init` step). If
 remote is unreachable, init falls back to a local `cce index` so it never leaves the
 project un-indexed (offline-first). The soft dependency is gated on
 config-configured + `auto_pull`, so MCP ships and runs with no Sync at all.
+
+## D42 — v2.4.1 dashboard refresh: additive metrics schema; freshness is offline; version bump decoupled from the sync format
+
+**Ambiguity:** the refresh must surface agent-vs-human usage, index freshness/sync
+status, and secret-safety without (a) breaking pre-v2.4 logs, (b) making the
+loopback dashboard touch the network, or (c) disturbing the two cross-language
+invariants. **Decisions:**
+
+- **Every new field is optional and defaulted.** `search` gains `source`
+  (`"cli"`/`"mcp"`; absent ⇒ `"cli"`, since before MCP every search was a human
+  CLI search) and optional `package`. `index` gains `source` (`"local"`/
+  `"sync-pull"`; absent ⇒ `"local"`), `sensitive_skipped` (absent ⇒ 0), and
+  optional `sha`. Old logs parse unchanged and the §4.1 aggregator anchor is
+  unaffected (it asserts field-by-field, not whole-hash equality).
+- **Freshness is computed purely from index events, offline.** The `/api/metrics`
+  `index_freshness` section reads the most-recent `index` event's `sha`/`source`. The
+  "behind remote" question needs a network round-trip, so it is **deliberately
+  excluded** from the dashboard and lives only in `cce sync status` and the MCP
+  `index_status` tool. This keeps the served dashboard fully offline — a hard
+  requirement (DASHBOARD-SPEC §6). `cce sync pull` records a `source: "sync-pull"`
+  index event so freshness reflects a pulled index without the dashboard ever
+  contacting the remote.
+- **The app version bump (2.4.1) is decoupled from the sync format.**
+  `CCE::VERSION` moved to `2.4.1` but `SYNC_FORMAT_VERSION` stays `"2.3"` (the
+  content address keys on `Sync.cce_version`, which returns the format version, not
+  the app version), so the cross-engine golden `581cbd0f…` and the single-repo
+  `conformance.json` remain byte-identical.

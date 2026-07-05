@@ -156,9 +156,10 @@ bundle exec bin/cce search "authenticate a user" --dir path/to/repo
 
 Notes:
 
-- This is the **only** code path that makes a network call, and only to
-  localhost. If the server is unreachable, CCE fails with a clear message rather
-  than crashing.
+- Among the indexing/search paths this is the only one that makes a network call,
+  and only to localhost. If the server is unreachable, CCE fails with a clear
+  message rather than crashing. (The other network-touching operations are
+  installing the gem and `cce sync push`/`pull`; everything else runs offline.)
 - Ollama vectors are model-dependent, so this mode is **not** covered by
   conformance or the published benchmarks.
 
@@ -170,3 +171,48 @@ run it, start Ollama on `localhost:11434` and set the env var:
 ```sh
 CCE_OLLAMA_TEST=1 bundle exec rake test
 ```
+
+## Index a multi-codebase ecosystem (workspace)
+
+Treat several related codebases under one root as one searchable whole — each
+member keeps its own isolated store.
+
+```sh
+bundle exec bin/cce workspace init myproduct    # detect members → .cce/workspace.yml
+bundle exec bin/cce index --workspace myproduct # index each member + build the graph
+bundle exec bin/cce search "charge amount" --workspace myproduct --top-k 3
+bundle exec bin/cce dashboard --workspace myproduct   # roll-up + per-member breakdown
+```
+
+Full model, detection rules, and federation semantics: [`workspace.md`](workspace.md).
+
+## Share an index with a teammate (CCE Sync)
+
+`.cce/` is a rebuildable cache; CCE Sync is "git remotes for the index". CI pushes
+a byte-identical cache; teammates pull it instead of re-indexing.
+
+```sh
+# CI / maintainer: index main and push the cache (one sync repo per access boundary)
+bundle exec bin/cce sync init --remote git@github.com:acme/cce-cache.git --repo-id github.com__acme__billing .
+bundle exec bin/cce index . && bundle exec bin/cce sync push .
+
+# Teammate: clone the source, pull the cache, search instantly
+bundle exec bin/cce sync init --remote git@github.com:acme/cce-cache.git --repo-id github.com__acme__billing .
+bundle exec bin/cce sync pull .
+bundle exec bin/cce sync verify .     # re-index locally + compare, without trusting the pusher
+```
+
+Byte-exact artifact format, content address, CI recipe, and troubleshooting:
+[`sync.md`](sync.md). A verified cold-start run: [`VERIFIED.md`](VERIFIED.md).
+
+## Use CCE from Claude Code (MCP)
+
+Wire CCE in as a native agent tool, then confirm the agent used it.
+
+```sh
+bundle exec bin/cce init .          # ensure an index + write .mcp.json + CLAUDE.md block
+# restart the editor, ask a question about the codebase, then:
+bundle exec bin/cce dashboard --dir .   # the Agent-vs-human panel shows the agent's queries
+```
+
+The server, the three tools, editor wiring, and confirming usage: [`mcp.md`](mcp.md).

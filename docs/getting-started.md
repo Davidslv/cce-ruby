@@ -43,7 +43,7 @@ green:
 bundle exec rake test
 ```
 
-You should see something like `84 runs, ... 0 failures, 0 errors, 1 skips`
+You should see something like `372 runs, ... 0 failures, 0 errors, 1 skips`
 (the one skip is the optional live Ollama test). If this passes, your
 environment is good.
 
@@ -101,6 +101,16 @@ bundle exec bin/cce packs --validate   # run the validators over every pack
 
 - **[`how-to.md`](how-to.md)** — task recipes: benchmark a real repo, validate
   packs, run conformance, switch to the Ollama embedder.
+- **[`workspace.md`](workspace.md)** — treat several related codebases under one
+  root as one searchable ecosystem (`cce workspace init`, `cce index --workspace`).
+- **[`sync.md`](sync.md)** — CCE Sync: push/pull a byte-identical index cache over
+  a git remote so a teammate skips re-indexing (offline-first).
+- **[`mcp.md`](mcp.md)** — wire CCE into Claude Code with `cce init` so the agent
+  calls `context_search` as a native tool.
+- **[`dashboard.md`](dashboard.md)** — the observability dashboard: savings,
+  retrieval quality, agent-vs-human usage, index freshness, and secret-safety.
+- **[`VERIFIED.md`](VERIFIED.md)** — recorded online AND offline cold-start
+  transcripts: proof every core workflow runs with no network.
 - **[`adding-a-language.md`](adding-a-language.md)** — add support for a new
   language as a self-contained pack.
 - **[`architecture.md`](architecture.md)** — how the pipeline fits together and
