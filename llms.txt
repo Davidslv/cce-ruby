@@ -18,6 +18,7 @@
 - [README](README.md): What CCE is, provenance, quickstart, commands, and a map to the docs.
 - [SPEC.md](SPEC.md): The authoritative specification — the source of truth for every behaviour.
 - [SPEC-V2.md](SPEC-V2.md): The v2.0 evolution spec — pluggable language packs, `kind`, validators, conformance v2.
+- [CCE Sync](docs/sync.md): v2.3 — offline-first, content-addressed cache over a git remote; byte-exact interchange artifact, content address, LFS backend, CI recipe, troubleshooting.
 - [Getting started](docs/getting-started.md): Install → first successful index and search, self-serve.
 - [How-to recipes](docs/how-to.md): Task recipes — index, search, packs, benchmark, conformance, Ollama.
 - [Adding a language](docs/adding-a-language.md): Step-by-step guide to adding a language pack, with a worked example.

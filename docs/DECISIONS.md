@@ -342,3 +342,85 @@ used only for edge resolution (matching one member's declared dependency to
 another member). This keeps the user-facing surface consistent — you scope and
 read results by the same member ids `workspace list` prints — while the
 dependency-name distinction stays an internal detail of edge building.
+
+## D35 — The checksum excludes `built_at`/`built_by` (and `checksum` itself)
+
+**Ambiguity:** SPEC-SYNC §2 says `checksum` = "SHA-256 over the canonical bytes
+with the manifest's `checksum` field omitted", while *also* requiring the artifact
+for `repo@sha` to be **byte-identical across people and across both engines**.
+Those two statements conflict: `built_at`/`built_by` differ between builders (CI at
+one time, a teammate at another), so if they entered the digest the cross-builder
+byte-identity would be impossible. **Decision:** the checksummed canonical bytes
+omit **all three provenance keys** — `checksum`, `built_at`, `built_by`
+(`Sync::PROVENANCE_KEYS`) — leaving only the deterministic identity (`cce_version`,
+`chunk_count`, `embedder`, `pack_set_id`, `repo_id`, `sha`) plus every chunk and
+the graph. This is the only reading under which the stated determinism guarantee is
+true, and it makes the `checksum` the stable value the Ruby and Rust engines diff.
+The written artifact still carries `built_at`/`built_by` as informational
+provenance on the manifest line; they simply do not affect the digest. `built_by`
+defaults to a fixed engine tag (`cce-ruby`), never a person, so nothing leaks
+identity into a shared cache.
+
+## D36 — Chunk objects use the spec key `id`; `language` is recomputed on import
+
+**Ambiguity:** the native store and `conformance.json` call the field `chunk_id`,
+but SPEC-SYNC §2 spells the artifact chunk object `{id, file_path, …}` and lists no
+`language`. **Decision:** the artifact follows the spec verbatim — the key is `id`,
+and `language` is not serialized. On import, `language` is recomputed from the
+chunk's `file_path` via `Chunker.language_for` (falling back to `plaintext`), which
+is exact because language is a pure function of the path through the pack registry
+(a file with a pack → the pack name; no pack → the whole-file `plaintext`
+fallback). The round-trip is therefore lossless without carrying a redundant field,
+and the on-the-wire key names match Rust.
+
+## D37 — `pack_set_id` is the sorted pack names; `repo_id` is overridable
+
+**Ambiguity:** §2/§3 name `pack_set_id` and `repo_id` as manifest identity but do
+not fix their exact string form, yet both are checksummed and so must match Rust.
+**Decision:** `pack_set_id` is the registry's language-pack names, sorted and
+comma-joined (`c,javascript,python,ruby,rust,typescript`) — the most natural
+representation both engines derive from the same registry. `repo_id` is normalized
+from the git origin (`host__org__repo`), but `--repo-id` / `sync.repo_id` overrides
+it; the shared golden fixture and any cross-engine cache should set an **explicit**
+`repo_id` so both engines key on the identical string and normalization never
+enters the equation. The golden checksum for the fixed fixture@sha is pinned in
+`test/sync_artifact_test.rb` as the concrete diff target.
+
+## D38 — Whole-file token counts are not part of the artifact
+
+**Ambiguity:** the store persists per-file whole-file token counts (DASHBOARD §3),
+but SPEC-SYNC §2 lists the artifact content as chunks + import graph + manifest,
+with no file-token section, while also requiring a "lossless" round-trip.
+**Decision:** the artifact carries exactly what the spec lists (so it stays
+byte-identical to Rust), and "lossless" is scoped to what determines retrieval and
+stats — chunks (all fields, `language` recomputed), bit-exact vectors, and the
+import graph. Whole-file token counts are a dashboard-only *baseline*, are not
+reconstructable from chunks alone (the whole-file content is not stored), and do
+not affect any search result or `cce stats` figure; a pulled store simply has them
+empty until the next local `cce index` recomputes them. `test/sync_artifact_test.rb`
+pins the round-trip as identical search results + identical re-exported checksum.
+
+## D39 — Workspace members share one remote, keyed by `repo_id__<package>`
+
+**Ambiguity:** §5 says `sync --workspace` iterates members "each keyed by its own
+`repo_id@sha`", but a workspace's members share a single git origin, so deriving
+`repo_id` from the origin would collide across members. **Decision:** workspace sync
+reuses the ordinary per-repo `Sync::Commands` per member, with the member's
+`repo_id` overridden to `<base_repo_id>__<package>` (`Sync.member_repo_id`,
+filesystem/URL-safe) and the shared workspace HEAD `sha`. Members therefore land
+under distinct content-address prefixes in one shared cache repo and never
+overwrite one another, while each member's store round-trips exactly as a
+standalone repo. This composes with SPEC-V2.2 without a second code path.
+
+## D40 — `push` reuses an existing hash index; refuses dirty tree / non-hash
+
+**Ambiguity:** §5 says `push` should "ensure a local hash-index for HEAD/sha" but
+not whether to always re-index. **Decision:** `push` refuses a **dirty working
+tree** (a cache is a committed `sha`) and, if a store already exists, refuses a
+**non-hash** one rather than silently rebuilding (so an Ollama index is never
+mistaken for shareable); when no store exists it indexes with the hash embedder.
+For a clean tree with an existing hash store it **reuses** that store — the
+documented flow is `cce index` then `cce sync push`, and re-indexing a large repo
+on every push would be wasteful. `verify` is the counterpart that rebuilds from
+scratch when you want the guarantee. A failed remote operation raises a clear
+`Sync::Error` and never mutates the local store (offline-first §9).

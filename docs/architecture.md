@@ -305,3 +305,52 @@ are untouched.
   (not Rails route mounting or path aliases yet); detection is heuristic, which is
   why the manifest is generated once and then hand-editable. See
   [`workspace.md`](workspace.md) for the full treatment.
+
+## CCE Sync (v2.3)
+
+CCE Sync (SPEC-SYNC) adds an optional, offline-first, content-addressed cache over
+a git remote. It lives entirely under `CCE::Sync` and is purely additive: absent a
+configured `sync.remote`, nothing runs and every command — and the single-repo
+`conformance.json` — is untouched.
+
+- **Determinism is the whole trick.** The index is a pure function of
+  `(repo@sha, cce version, pack set, hash embedder)`, so a cache for `repo@sha` is
+  content-addressable — no "whose version wins", no merge. A teammate's push, CI's
+  push, and a fresh local build are bit-for-bit identical, which is what makes a
+  pull safe and `verify` (rebuild-and-compare) meaningful. Only the deterministic
+  hash embedder qualifies; Ollama indexes are local-only and `push` refuses them.
+- **The artifact is a third format, not either native store.** Ruby stores SQLite
+  and Rust stores JSON, so the interchange artifact (`Sync::Artifact`) is a
+  canonical, byte-exact, newline-delimited stream: a manifest line, one compact
+  sorted-key JSON object per chunk (sorted by `(file_path, start_line, chunk_id)`),
+  then the import graph. Embeddings are **base64 of 256 little-endian IEEE-754
+  `f64` bytes** so the vectors are bit-identical regardless of float→string
+  formatting. The `checksum` is SHA-256 over the canonical bytes with the
+  provenance keys (`checksum`, `built_at`, `built_by`) excluded — those differ
+  between builders and would otherwise break the cross-language byte-identity the
+  whole scheme depends on. Import recomputes each chunk's `language` from its path
+  (a pure function via the pack registry), so the artifact need not carry it.
+- **The remote is plain git, keyed by content address.** `Sync::ContentAddress`
+  builds `<embedder>/<cce_ver>/<repo_id>/<sha>.cce`; `Sync::GitRemote` is a working
+  clone under `~/.cce/sync/<remote-id>/` implementing `put`/`get`/`has`/`list`/
+  `latest`. Distinct shas are distinct files, so the only race is git-ref
+  advancement — handled with fetch → rebase → retry. `*.cce` blobs route through
+  git-LFS by default. Auth/permissions are git's; CCE adds no RBAC (SPEC-SYNC §6).
+- **Component model.** `ContentAddress` (keying) + `Artifact` (export/import/
+  checksum) + `Git` (a thin CLI wrapper) + `GitRemote` (the `SyncRemote` backend)
+  + `Config` (layered `sync.*`) compose into `Sync::Commands`, the per-project
+  engine that holds the offline-first contract: refuse a dirty tree / non-hash
+  index on `push`, validate-and-install on `pull`, guard overwrites of a different
+  `sha`, rebuild-and-compare on `verify`, and translate every git/remote failure
+  into a clear `Sync::Error` so local work is never corrupted. The CLI is a thin
+  formatter; workspace mode reuses `Commands` per member with a `repo_id__<package>`
+  override, so a workspace is just N repos sharing one remote.
+- **Where it strains (documented next steps).** The branch overlay (incremental
+  reindex of changed files on top of a pulled base) is out of scope in v1 — a
+  differing working tree falls back to a normal local `cce index`. Whole-file token
+  counts (a dashboard-only baseline, DASHBOARD §3) are not carried in the artifact,
+  since they are not reconstructable from chunks alone and are irrelevant to search
+  results and stats; a pulled store recomputes them on the next local `cce index`.
+  Non-git backends (S3/HTTP) and a read-only Sourcegraph adapter are possible
+  through the same `SyncRemote` interface without CLI changes. See
+  [`sync.md`](sync.md) for the full treatment.

@@ -19,6 +19,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
+require "open3"
 require "cce"
 
 # Real-format secret literals used by the redaction tests, assembled from split
@@ -99,6 +100,63 @@ module TestSupport
       FileUtils.cp_r("#{workspace_fixture_dir}/.", root)
       yield root
     end
+  end
+
+  # ---- CCE Sync helpers (SPEC-SYNC §11: hermetic, local bare git repo) -------
+
+  # Run git in `dir` with a fixed identity, raising on failure. Used only to set
+  # up the source/remote repos the sync tests act against (the engine has its own
+  # git wrapper in lib/cce/sync/git.rb).
+  def git(*args, dir:)
+    out, status = Open3.capture2e(
+      "git", "-c", "user.name=Test", "-c", "user.email=test@cce.local",
+      "-C", dir, *args.map(&:to_s)
+    )
+    raise "git #{args.join(' ')} failed: #{out}" unless status.success?
+
+    out
+  end
+
+  # Create a bare git repository (a stand-in for the sync cache remote).
+  def bare_repo(path)
+    FileUtils.mkdir_p(File.dirname(path))
+    _out, status = Open3.capture2e("git", "init", "--bare", "-q", path)
+    raise "git init --bare failed" unless status.success?
+
+    path
+  end
+
+  # Create a source git repo at `dir` with `files` (rel => content), a .gitignore
+  # for .cce/, one commit, and return its HEAD sha. `origin` (a bare repo path)
+  # is wired as the origin remote and the commit pushed to main when given.
+  def init_source_repo(dir, files, origin: nil)
+    FileUtils.mkdir_p(dir)
+    git("init", "-q", dir: dir)
+    git("symbolic-ref", "HEAD", "refs/heads/main", dir: dir)
+    File.write(File.join(dir, ".gitignore"), ".cce/\n")
+    files.each do |rel, content|
+      path = File.join(dir, rel)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, content)
+    end
+    git("add", "-A", dir: dir)
+    git("commit", "-qm", "init", dir: dir)
+    if origin
+      git("remote", "add", "origin", "file://#{origin}", dir: dir)
+      git("push", "-q", "origin", "HEAD:main", dir: dir)
+    end
+    git("rev-parse", "HEAD", dir: dir).strip
+  end
+
+  # A tiny two-file Python source tree used across sync tests.
+  SYNC_SAMPLE = {
+    "auth.py" => "import hashlib\n\ndef hash_password(p):\n    return hashlib.sha256(p.encode()).hexdigest()\n",
+    "pay.py" => "from auth import hash_password\n\ndef process_payment(amount):\n    return amount\n"
+  }.freeze
+
+  # Build an injected GitRemote over a bare repo with a hermetic clone dir.
+  def git_remote_for(url, base, lfs: false)
+    CCE::Sync::GitRemote.new(url: "file://#{url}", clone_dir: File.join(base, "clone-#{rand(1 << 32)}"), lfs: lfs)
   end
 
   # Materialise the normative conformance fixture (SPEC §8.1) into `dir`.

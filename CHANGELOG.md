@@ -7,8 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-07-05
+
+CCE Sync (SPEC-SYNC) — an optional, **offline-first, content-addressed cache** for
+code-context indexes, layered over the local-first core. *git remotes for the
+index*: your local `.cce/` stays authoritative, and a git-backed remote is a cache
+you push to and pull from. Because indexing is deterministic, the cache for
+`repo@sha` (hash embedder) is **byte-identical** across people and across the
+Ruby/Rust engines. This is an additive minor release: absent a configured remote
+every command behaves exactly as before, and the single-repo `conformance.json` is
+byte-for-byte unchanged.
+
+### Added
+
+- **Portable interchange artifact (SPEC-SYNC §2).** `CCE::Sync::Artifact` exports
+  a store to a canonical, byte-exact, newline-delimited stream (manifest line →
+  one compact sorted-key JSON object per chunk, sorted by
+  `(file_path, start_line, chunk_id)` → import graph) and imports it back
+  losslessly. **Embeddings are base64 of 256 little-endian IEEE-754 `f64` bytes**
+  (not decimals), so vectors are bit-identical across languages. `checksum` is the
+  lowercase-hex SHA-256 over the canonical bytes with the provenance keys
+  (`checksum`, `built_at`, `built_by`) omitted — the value the two engines diff to
+  prove interoperability.
+- **Content address (§3).** `CCE::Sync::ContentAddress` keys a cache at
+  `<embedder>/<cce_ver>/<repo_id>/<sha>.cce`, with `repo_id` derived from the git
+  origin or overridden via `--repo-id`.
+- **Git remote backend (§4).** `CCE::Sync::GitRemote` implements the `SyncRemote`
+  interface over a working clone under `~/.cce/sync/<remote-id>/`:
+  `put`/`get`/`has`/`list`/`latest`, with **fetch-rebase-retry** on a concurrent
+  push race and **git-LFS** for `*.cce` (`.gitattributes` written by
+  `cce sync init`; `--no-lfs` for plain git).
+- **CLI (§5).** `cce sync init | push | pull | status | verify`, each
+  `--workspace`-aware (iterating members, keyed by `repo_id__<package>@sha`).
+  `push` refuses a dirty working tree and a non-hash index; `pull` validates the
+  checksum and will not silently replace a different `sha` without `--force`;
+  `verify` re-indexes locally and rebuild-compares the checksum.
+- **Config (§8).** `sync.*` keys (`remote`, `lfs`, `repo_id`, `auto_pull`,
+  `retention`) in a global `~/.cce/config.yml` merged under a per-project
+  `.cce/config`. All optional; absent ⇒ pure local CCE.
+- **Docs.** A README *CCE Sync* section with a real captured walkthrough and
+  macOS/Ubuntu install steps, [`docs/sync.md`](docs/sync.md) (model, artifact
+  format, content address, permissions, a GitHub Actions CI recipe,
+  troubleshooting), and a verified cold-start transcript in
+  [`docs/VERIFIED.md`](docs/VERIFIED.md).
+
+### Guarantees
+
+- **Offline-first (§9).** No remote ⇒ unchanged behaviour; an unreachable remote
+  fails gracefully and never touches the local store; `pull` never clobbers a
+  newer local index for a different `sha` without `--force`.
+- Only the **hash** embedder is shareable; Ollama/semantic indexes are local-only
+  and refused by `push`.
+
 ### Changed
 
+- Version bumped to **2.3.0** (`lib/cce.rb`, `CITATION.cff`).
 - **Test-only.** Pinned `test/fixture/workspace/` to the canonical byte-exact
   bytes shared with the sibling repo for cross-language parity. No behaviour
   change; SPEC-V2.2 §8 structural expectations still hold.

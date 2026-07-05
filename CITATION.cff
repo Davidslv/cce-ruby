@@ -6,7 +6,9 @@ abstract: >-
   repository with tree-sitter, embeds each chunk, stores a vector and keyword
   index on disk, and answers queries with hybrid vector + BM25 retrieval. A
   clean-room, test-first Ruby implementation of the shared specification
-  (SPEC v1.0), extended to workspaces of related codebases (SPEC v2.2).
+  (SPEC v1.0), extended to workspaces of related codebases (SPEC v2.2) and an
+  optional offline-first, content-addressed sync cache over a git remote
+  (SPEC-SYNC, v2.3).
 type: software
 authors:
   - given-names: David
@@ -16,7 +18,7 @@ authors:
 repository-code: "https://github.com/davidslv/cce-ruby"
 url: "https://github.com/davidslv/cce-ruby"
 license: MIT
-version: 2.2.0
+version: 2.3.0
 date-released: "2026-07-05"
 keywords:
   - code-search
@@ -28,3 +30,5 @@ keywords:
   - ruby
   - workspace
   - monorepo
+  - sync
+  - content-addressed-cache

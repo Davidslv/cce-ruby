@@ -52,6 +52,34 @@ search a query
   six supported languages (Ruby, Rust, TypeScript, C, Python, JavaScript) are
   provided as prebuilt dylibs by the `tree_sitter_language_pack` gem and loaded
   through the `ruby_tree_sitter` bindings.
+- **CCE Sync only** (optional, see the *CCE Sync* section below): `git`, and
+  `git-lfs` if you keep the LFS default on. Everything else works with no network
+  and no extra tools.
+
+### Install
+
+#### macOS
+
+```bash
+brew install ruby git git-lfs   # Ruby 3.2+; git & git-lfs are only needed for CCE Sync
+git lfs install                 # one-time, per user (CCE Sync with LFS)
+git clone https://github.com/davidslv/cce-ruby && cd cce-ruby
+bundle install
+bundle exec rake test           # deterministic, hermetic, no network
+```
+
+#### Ubuntu
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ruby-full git git-lfs   # Ruby 3.2+
+git lfs install                                 # one-time, per user (CCE Sync with LFS)
+git clone https://github.com/davidslv/cce-ruby && cd cce-ruby
+bundle install
+bundle exec rake test
+```
+
+Verify the binary: `bundle exec bin/cce help`.
 
 ## Supported languages
 
@@ -221,6 +249,58 @@ Cross-member **dependency edges** (read from `Gemfile` / `*.gemspec` /
 `package.json`) let a top result in one member expand into the members it depends
 on. See [`docs/workspace.md`](docs/workspace.md) for the full model.
 
+## CCE Sync — a distributed, offline-first cache
+
+**Sync is *git remotes for the index*.** Your local `.cce/` is authoritative; an
+optional git-backed remote is a **content-addressed cache** you push to and pull
+from. Because the index is a deterministic function of `(repo@sha, cce version,
+pack set, hash embedder)`, the cache for `repo@sha` is **byte-identical** no
+matter who — or which language engine — built it. So a pull is just downloading an
+index someone already computed, and `cce sync verify` rebuilds it locally to prove
+it, bit-for-bit.
+
+**Sync is purely additive.** With no remote configured, every command works
+exactly as before; a failed `push`/`pull` never breaks local indexing or search.
+Only the default **hash** embedder is shareable — Ollama indexes are local-only.
+
+Two git repos are involved and they are **not the same**: your **source** repo
+(the code) and a separate **sync cache** repo (the `*.cce` artifacts, written by
+CI and, safely, by members). Create the cache repo once, then:
+
+```bash
+# --- on CI, or a maintainer: index main and push the cache ---
+bundle exec bin/cce index .
+bundle exec bin/cce sync init --remote git@github.com:acme/cce-cache.git \
+                              --repo-id github.com__acme__billing .
+bundle exec bin/cce sync push .
+#   → pushed github.com__acme__billing@158922bf0787 (3 chunks)
+#   →   key:      hash/2.3/github.com__acme__billing/158922bf0787….cce
+#   →   checksum: 261cb72bc523ac347232929997d243125e39aeba4e3f399b13ffbdfdfc4cb645
+
+# --- on a teammate machine: clone the source, pull the cache, search instantly ---
+git clone git@github.com:acme/billing.git && cd billing
+bundle exec bin/cce sync init --remote git@github.com:acme/cce-cache.git \
+                              --repo-id github.com__acme__billing .
+bundle exec bin/cce sync pull .
+#   → Installed cache github.com__acme__billing@158922bf0787 (3 chunks) into .cce/
+#   →   working tree matches this commit — the pulled index is used as-is.
+bundle exec bin/cce search "hash password"
+#   → 1. [0.878300] src/auth.py:3-4 (function/function_definition)
+#   →        def hash_password(password):
+
+# --- supply-chain check: re-index locally and compare, without trusting the pusher ---
+bundle exec bin/cce sync verify .
+#   → verify OK: re-indexed 158922bf0787 matches the cached checksum
+```
+
+The commands: `sync init` · `sync push` · `sync pull [--latest|--commit SHA]` ·
+`sync status` · `sync verify` — each takes `--workspace` to iterate members. Blobs
+go through **git-LFS** by default (`--no-lfs` for plain git). The full model, the
+byte-exact **artifact format**, the content-address scheme, permissions guidance,
+a **ready-to-copy GitHub Actions CI recipe**, and troubleshooting are in
+[`docs/sync.md`](docs/sync.md). A verified, end-to-end cold-start transcript is in
+[`docs/VERIFIED.md`](docs/VERIFIED.md).
+
 ## Embedders
 
 - **`hash` (default):** a deterministic, model-free hashing embedder (FNV-1a
@@ -274,9 +354,11 @@ aggregation formulas.
 bundle exec rake test
 ```
 
-The suite is deterministic and hermetic (no external network): **256 tests, ~94%
+The suite is deterministic and hermetic (no external network): **311 tests, ~94%
 line coverage** (SimpleCov; 1 skip is the live Ollama integration test, excluded
-from the default suite). The metrics subsystem's clock and id source are injected
+from the default suite). CCE Sync tests run against a **local bare git repo**
+(`file://`) and do **not** require the `git-lfs` binary — the LFS path is a smoke
+test that skips gracefully when git-lfs is absent. The metrics subsystem's clock and id source are injected
 so its tests are deterministic despite the feature being time-based. See
 [`docs/TDD.md`](docs/TDD.md) for the red→green log, the exact test count, and the
 coverage breakdown.
@@ -289,7 +371,10 @@ coverage breakdown.
 | [`SPEC-V2.md`](SPEC-V2.md) | The v2.0 evolution spec: pluggable language packs, `kind`, validators, conformance v2. |
 | [`SPEC-V2.1.md`](SPEC-V2.1.md) | The v2.1 evolution spec: secret & sensitive-file protection. |
 | [`SPEC-V2.2.md`](SPEC-V2.2.md) | The v2.2 evolution spec: workspaces / multi-codebase ecosystems. |
+| [`SPEC-SYNC.md`](SPEC-SYNC.md) | The v2.3 design spec: CCE Sync — offline-first, content-addressed cache over a git remote. |
 | [`docs/workspace.md`](docs/workspace.md) | The workspace model, manifest format, detection rules, federation semantics, and strain points. |
+| [`docs/sync.md`](docs/sync.md) | CCE Sync: the model, byte-exact artifact format, content address, git/LFS backend, permissions, CI recipe, troubleshooting. |
+| [`docs/VERIFIED.md`](docs/VERIFIED.md) | The verified, cold-start end-to-end sync walkthrough transcript (SPEC-SYNC §10.5 gate). |
 | [`docs/getting-started.md`](docs/getting-started.md) | Newcomer path: install → first successful index + search. |
 | [`docs/how-to.md`](docs/how-to.md) | Task recipes: index, search, benchmark, packs, conformance, switch to Ollama. |
 | [`docs/adding-a-language.md`](docs/adding-a-language.md) | Step-by-step guide to adding a language pack, with a worked example. |
@@ -336,6 +421,9 @@ lib/cce/                # implementation, one concern per file
   workspace.rb          # workspace namespace + constants (v2.2)
   workspace/            # detector, manifest, dependencies, graph, indexer,
                         #   federation, stats, dashboard (v2.2)
+  sync.rb               # sync namespace + constants + require point (v2.3)
+  sync/                 # artifact, content_address, git, git_remote, config,
+                        #   commands — offline-first content-addressed cache (v2.3)
   cli.rb                # command-line dispatch
 test/                   # tests, written first
 test/fixture/samples/   # the seven byte-exact sample fixtures (pack self-tests + conformance corpus)
