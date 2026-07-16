@@ -11,5 +11,5 @@ gem "webrick", "~> 1.9"                     # minimal loopback HTTP server for `
 group :development, :test do
   gem "minitest", "~> 6.0"      # standard test framework (TDD)
   gem "rake", "~> 13.2"         # test task runner
-  gem "simplecov", "~> 0.22"    # coverage measurement
+  gem "simplecov", "~> 1.0"     # coverage measurement
 end
