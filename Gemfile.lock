@@ -1,7 +1,6 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    docile (1.4.1)
     drb (2.2.3)
     minitest (6.0.6)
       drb (~> 2.0)
@@ -33,12 +32,7 @@ GEM
       oppen (~> 1.0)
       sorbet-runtime
       zeitwerk
-    simplecov (0.22.0)
-      docile (~> 1.1)
-      simplecov-html (~> 0.11)
-      simplecov_json_formatter (~> 0.1)
-    simplecov-html (0.13.2)
-    simplecov_json_formatter (0.1.4)
+    simplecov (1.0.2)
     sorbet-runtime (0.6.13341)
     sqlite3 (2.9.5-aarch64-linux-gnu)
     sqlite3 (2.9.5-aarch64-linux-musl)
@@ -71,14 +65,13 @@ DEPENDENCIES
   minitest (~> 6.0)
   rake (~> 13.2)
   ruby_tree_sitter (~> 2.1)
-  simplecov (~> 0.22)
+  simplecov (~> 1.0)
   sqlite3 (~> 2.9)
   tree_sitter_language_pack (~> 1.12)
   webrick (~> 1.9)
 
 CHECKSUMS
   bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
-  docile (1.4.1) sha256=96159be799bfa73cdb721b840e9802126e4e03dfc26863db73647204c727f21e
   drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
   minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
   oppen (1.0.0) sha256=379bf0b35c5e87c5f4139927721fd6c9f561e344a73ce3f658726a609034ddee
@@ -90,9 +83,7 @@ CHECKSUMS
   ruby_tree_sitter (2.1.1-x86_64-darwin) sha256=09324ce89e8323db61436b8288ee68b877883c21d6346f19cc8ec2af59d834f5
   ruby_tree_sitter (2.1.1-x86_64-linux-gnu) sha256=a3010251d56edaecf1ef7162fbf18204dde1fda853b2e41c19db7a25cd811f7a
   ruby_tree_sitter (2.1.1-x86_64-linux-musl) sha256=e74069896ca6a0a68d6ceea261f02e56c78481b2127eadbf0d84849e7cc236f0
-  simplecov (0.22.0) sha256=fe2622c7834ff23b98066bb0a854284b2729a569ac659f82621fc22ef36213a5
-  simplecov-html (0.13.2) sha256=bd0b8e54e7c2d7685927e8d6286466359b6f16b18cb0df47b508e8d73c777246
-  simplecov_json_formatter (0.1.4) sha256=529418fbe8de1713ac2b2d612aa3daa56d316975d307244399fa4838c601b428
+  simplecov (1.0.2) sha256=c6459434efe4b948b46477cc2df2faa73ab365f83a33c7c17f81262f4f7f1244
   sorbet-runtime (0.6.13341) sha256=b1dfbf0e08ba4a684b5e5e8468c486aa1fea20dfd862502f3b7f80f5da2b4c90
   sqlite3 (2.9.5-aarch64-linux-gnu) sha256=78075b6337d3d182c6d2b4691049ed45cd220826160c9ea18946bf6a1de200dc
   sqlite3 (2.9.5-aarch64-linux-musl) sha256=18c801185deb4adc01ddb281e8f672a39e3d1729979ca91e39439cd3eac0402d
