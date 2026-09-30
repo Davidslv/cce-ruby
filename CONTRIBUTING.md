@@ -16,7 +16,7 @@ truth, and behaviour changes are spec changes.
 
 ## Development setup
 
-Requirements: **Ruby >= 3.2** (developed on 3.4.7) and Bundler.
+Requirements: **Ruby >= 3.3** (developed on 3.4.7) and Bundler.
 
 ```sh
 git clone https://github.com/davidslv/cce-ruby.git

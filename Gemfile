@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-ruby ">= 3.2"
+ruby ">= 3.3"
 
 # Runtime dependencies
 gem "sqlite3", "~> 2.9"                    # on-disk persistence store
