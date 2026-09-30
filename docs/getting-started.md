@@ -5,7 +5,7 @@ This guide takes you from nothing to your first successful **index** and
 
 ## 1. Prerequisites
 
-- **Ruby 3.2 or newer.** Check with:
+- **Ruby 3.3 or newer.** Check with:
 
   ```sh
   ruby -v

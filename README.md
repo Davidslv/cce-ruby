@@ -52,7 +52,7 @@ search a query
 
 ## Requirements
 
-- **Ruby 3.2+** (developed on 3.4.7).
+- **Ruby 3.3+** (developed on 3.4.7).
 - A C toolchain is **not** required at runtime: the tree-sitter grammars for all
   six supported languages (Ruby, Rust, TypeScript, C, Python, JavaScript) are
   provided as prebuilt dylibs by the `tree_sitter_language_pack` gem and loaded
@@ -66,7 +66,7 @@ search a query
 #### macOS
 
 ```bash
-brew install ruby git git-lfs   # Ruby 3.2+; git & git-lfs are only needed for CCE Sync
+brew install ruby git git-lfs   # Ruby 3.3+; git & git-lfs are only needed for CCE Sync
 git lfs install                 # one-time, per user (CCE Sync with LFS)
 git clone https://github.com/davidslv/cce-ruby && cd cce-ruby
 bundle install
@@ -77,7 +77,7 @@ bundle exec rake test           # deterministic, hermetic, no network
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ruby-full git git-lfs   # Ruby 3.2+
+sudo apt-get install -y ruby-full git git-lfs   # Ruby 3.3+
 git lfs install                                 # one-time, per user (CCE Sync with LFS)
 git clone https://github.com/davidslv/cce-ruby && cd cce-ruby
 bundle install
@@ -109,7 +109,7 @@ structural, grammar-binding, and behavioural validators over every pack.
 ## Quickstart
 
 ```sh
-# 1. Install dependencies (Ruby >= 3.2 required)
+# 1. Install dependencies (Ruby >= 3.3 required)
 bundle install
 
 # 2. Run the test suite (deterministic, hermetic, no network)

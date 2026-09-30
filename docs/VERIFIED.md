@@ -394,7 +394,7 @@ ruby 3.4.7
 
 Install steps for a fresh machine are in the README
 ([macOS](../README.md#macos) / [Ubuntu](../README.md#ubuntu)). They were used to
-produce the environment above (`git`, `git-lfs` + `git lfs install`, Ruby ≥ 3.2,
+produce the environment above (`git`, `git-lfs` + `git lfs install`, Ruby ≥ 3.3,
 `bundle install`).
 
 ## Setup — one source repo + one SEPARATE sync cache repo

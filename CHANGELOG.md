@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Minimum Ruby is now 3.3 (Ruby 3.2 reached end of life in March 2026). CI tests 3.3 and 3.4. Needed for simplecov 1.x.
+
 ## [2.4.1] - 2026-07-05
 
 The **closing task of the v2.4 milestone**: a dashboard refresh that surfaces the
