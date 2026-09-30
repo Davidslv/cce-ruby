@@ -33,20 +33,20 @@ GEM
       sorbet-runtime
       zeitwerk
     simplecov (1.3.1)
-    sorbet-runtime (0.6.13341)
+    sorbet-runtime (0.6.13511)
     sqlite3 (2.9.6-aarch64-linux-gnu)
     sqlite3 (2.9.6-aarch64-linux-musl)
     sqlite3 (2.9.6-arm64-darwin)
     sqlite3 (2.9.6-x86_64-darwin)
     sqlite3 (2.9.6-x86_64-linux-gnu)
     sqlite3 (2.9.6-x86_64-linux-musl)
-    tree_sitter_language_pack (1.12.5-aarch64-linux)
+    tree_sitter_language_pack (1.20.0-aarch64-linux)
       sorbet-runtime (~> 0.5)
-    tree_sitter_language_pack (1.12.5-arm64-darwin)
+    tree_sitter_language_pack (1.20.0-arm64-darwin)
       sorbet-runtime (~> 0.5)
-    tree_sitter_language_pack (1.12.5-x86_64-darwin)
+    tree_sitter_language_pack (1.20.0-x86_64-darwin)
       sorbet-runtime (~> 0.5)
-    tree_sitter_language_pack (1.12.5-x86_64-linux)
+    tree_sitter_language_pack (1.20.0-x86_64-linux)
       sorbet-runtime (~> 0.5)
     webrick (1.9.2)
     zeitwerk (2.8.2)
@@ -67,7 +67,7 @@ DEPENDENCIES
   ruby_tree_sitter (~> 2.1)
   simplecov (~> 1.3)
   sqlite3 (~> 2.9)
-  tree_sitter_language_pack (~> 1.12)
+  tree_sitter_language_pack (~> 1.20)
   webrick (~> 1.9)
 
 CHECKSUMS
@@ -84,17 +84,17 @@ CHECKSUMS
   ruby_tree_sitter (2.1.1-x86_64-linux-gnu) sha256=a3010251d56edaecf1ef7162fbf18204dde1fda853b2e41c19db7a25cd811f7a
   ruby_tree_sitter (2.1.1-x86_64-linux-musl) sha256=e74069896ca6a0a68d6ceea261f02e56c78481b2127eadbf0d84849e7cc236f0
   simplecov (1.3.1) sha256=b326d38e819053499aa2ebe35d544d8bd780eba143a50f48a624b450ad87feec
-  sorbet-runtime (0.6.13341) sha256=b1dfbf0e08ba4a684b5e5e8468c486aa1fea20dfd862502f3b7f80f5da2b4c90
+  sorbet-runtime (0.6.13511) sha256=657893177bcc55e7b5c55640105de6659dfcb8dc52fd701a6d969468f6043a94
   sqlite3 (2.9.6-aarch64-linux-gnu) sha256=d8b1f7d23efd7abac285775a9566562fc7debfef79d594e3a20354406fb7907c
   sqlite3 (2.9.6-aarch64-linux-musl) sha256=3579e1c98cdc7ff5c3722847bb63ed4e1efb7ff675cb5e1e48ef2d4da5fb3bc9
   sqlite3 (2.9.6-arm64-darwin) sha256=849b5d7f795e60fe25076d62c72dd722beb45b3850b516ad978d60ee848ec15b
   sqlite3 (2.9.6-x86_64-darwin) sha256=b5842fea77781c14da03fa7bc0feb82db03a69e135affcb6f5399cbd2797a5f3
   sqlite3 (2.9.6-x86_64-linux-gnu) sha256=613188ce02f614126ddbc38c5e217ccffd6306d0dcd9adca9764547aa890a634
   sqlite3 (2.9.6-x86_64-linux-musl) sha256=d493b11818a3573387a1d56e1ee8fa00da23a683a7a1cc063e7a0feeed843abf
-  tree_sitter_language_pack (1.12.5-aarch64-linux) sha256=8d6f26ac4839783ade091d3d6b4857755440d64d1a9da7d0becbb885ace7102a
-  tree_sitter_language_pack (1.12.5-arm64-darwin) sha256=6d99ce97f8004146e16d678ac63fc8adb84b88f6f8438e4c116960c39bc71670
-  tree_sitter_language_pack (1.12.5-x86_64-darwin) sha256=f8cfa6651c36524ac06d226197a20f5e5784c5ef0919e05e211564fb5563b972
-  tree_sitter_language_pack (1.12.5-x86_64-linux) sha256=3c9259c70e4d7708d703ff9c1ea28fd7837d78ddff766ea4c9d645d43ecf2981
+  tree_sitter_language_pack (1.20.0-aarch64-linux) sha256=8b43f4c3d18705d4211a5dc0d9281f5e68616c8dd6b323df411b9ee026894f6f
+  tree_sitter_language_pack (1.20.0-arm64-darwin) sha256=b5e6899bedaa750f030a12bfd5db96fe9ed6a0617eee37119c0ffafd49d5baae
+  tree_sitter_language_pack (1.20.0-x86_64-darwin) sha256=8c33f147b46b768a8c333fe8ee3924279feed0c39819232cd92a73f8d34826d6
+  tree_sitter_language_pack (1.20.0-x86_64-linux) sha256=ce5e910a1443afbc770eb6cd18d33b08327fed1ef721f6c9a15e0dfccf7327a4
   webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
   zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
 
