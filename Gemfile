@@ -3,7 +3,7 @@ source "https://rubygems.org"
 ruby ">= 3.3"
 
 # Runtime dependencies
-gem "sqlite3", "~> 2.9"                    # on-disk persistence store
+gem "sqlite3", "~> 2.10"                   # on-disk persistence store
 gem "ruby_tree_sitter", "~> 2.1"           # tree-sitter FFI bindings for AST chunking
 gem "tree_sitter_language_pack", "~> 1.20" # bundled grammars (ruby/rust/typescript/c/python/javascript)
 gem "webrick", "~> 1.9"                     # minimal loopback HTTP server for `cce dashboard`
